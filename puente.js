@@ -334,8 +334,10 @@ export function puente({ version, os, recordatorios }) {
     var on = REM_ON === true;
     var d = document.createElement('div');
     d.className = 'srow'; d.id = 'lkapp-rem'; d.style.cursor = 'default';
-    d.innerHTML = '<div class="stile">⏰</div><div class="grow"><div class="t">' + Lx('Recordatorios en el celular', 'Phone reminders') +
-      '</div><div class="mut" style="font-size:13px">' + Lx('Pagos fijos, cuotas y garantías por vencer', 'Bills, installments and expiring warranties') +
+    var ico = '<svg class="li" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="7.5"/><path d="M12 9.5V13l2.5 1.8"/><path d="M4.5 4.5 7 2.5M19.5 4.5 17 2.5"/></svg>';
+    var st0 = q('.stile', row);
+    d.innerHTML = '<div class="stile">' + (st0 && q('svg', st0) ? ico : '⏰') + '</div><div class="grow"><div class="t">' + Lx('Recordatorios', 'Reminders') +
+      '</div><div class="mut" style="font-size:13px">' + Lx('Avisos en el celular de pagos fijos, cuotas y garantías', 'Phone alerts for bills, installments and warranties') +
       (on ? ' · <button class="lnk" data-lkrem="test" style="padding:0;font-size:13px">' + Lx('Probar', 'Test') + '</button>' : '') +
       '</div></div><div class="seg"><button data-lkrem="si" aria-pressed="' + on + '">' + Lx('Sí', 'Yes') +
       '</button><button data-lkrem="no" aria-pressed="' + !on + '">No</button></div>';
