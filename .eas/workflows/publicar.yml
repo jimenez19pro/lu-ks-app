@@ -1,0 +1,10 @@
+name: Publicar Lu-Ks
+on:
+  push:
+    branches: ['main']
+jobs:
+  publicar:
+    name: Publicar actualización
+    type: update
+    params:
+      branch: main
