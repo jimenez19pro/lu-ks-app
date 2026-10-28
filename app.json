@@ -11,7 +11,9 @@
     "ios": {
       "bundleIdentifier": "com.jimenez19pro.luks",
       "supportsTablet": false,
-      "config": { "usesNonExemptEncryption": false },
+      "config": {
+        "usesNonExemptEncryption": false
+      },
       "infoPlist": {
         "NSCameraUsageDescription": "Lu-Ks usa la cámara para tomar fotos de recibos y garantías.",
         "NSPhotoLibraryUsageDescription": "Lu-Ks usa tus fotos para leer recibos y guardar garantías.",
@@ -25,7 +27,9 @@
         "foregroundImage": "./icono-fondo.png",
         "backgroundColor": "#0047D6"
       },
-      "permissions": ["CAMERA"]
+      "permissions": [
+        "CAMERA"
+      ]
     },
     "plugins": [
       [
@@ -35,10 +39,26 @@
           "imageWidth": 120,
           "resizeMode": "contain",
           "backgroundColor": "#F2F2F7",
-          "dark": { "image": "./icon.png", "backgroundColor": "#000000" }
+          "dark": {
+            "image": "./icon.png",
+            "backgroundColor": "#000000"
+          }
         }
       ],
       "expo-sharing"
-    ]
+    ],
+    "owner": "lu-ks-app",
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/6974df26-5e12-43c2-b9ed-94661531dc85",
+      "fallbackToCacheTimeout": 0
+    },
+    "extra": {
+      "eas": {
+        "projectId": "6974df26-5e12-43c2-b9ed-94661531dc85"
+      }
+    }
   }
 }
