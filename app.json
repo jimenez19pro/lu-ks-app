@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "Lu-Ks",
+    "slug": "lu-ks",
+    "scheme": "luks",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./icon.png",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#F2F2F7",
+    "ios": {
+      "bundleIdentifier": "com.jimenez19pro.luks",
+      "supportsTablet": false,
+      "config": { "usesNonExemptEncryption": false },
+      "infoPlist": {
+        "NSCameraUsageDescription": "Lu-Ks usa la cámara para tomar fotos de recibos y garantías.",
+        "NSPhotoLibraryUsageDescription": "Lu-Ks usa tus fotos para leer recibos y guardar garantías.",
+        "NSMicrophoneUsageDescription": "Lu-Ks no graba audio; iOS pide este permiso para algunas funciones de la cámara."
+      }
+    },
+    "android": {
+      "package": "com.jimenez19pro.luks",
+      "adaptiveIcon": {
+        "backgroundImage": "./icon.png",
+        "foregroundImage": "./icono-fondo.png",
+        "backgroundColor": "#0047D6"
+      },
+      "permissions": ["CAMERA"]
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./icon.png",
+          "imageWidth": 120,
+          "resizeMode": "contain",
+          "backgroundColor": "#F2F2F7",
+          "dark": { "image": "./icon.png", "backgroundColor": "#000000" }
+        }
+      ],
+      "expo-sharing"
+    ]
+  }
+}
