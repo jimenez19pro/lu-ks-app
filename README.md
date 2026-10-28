@@ -13,10 +13,20 @@ dentro de una app.
 - Android: el botón Atrás cierra la ventana abierta y luego sale.
 - El teclado se abre solo cuando la página enfoca un campo (botón +).
 
+## Etapa 2 (28 oct 2026)
+- **Inicio nativo** (`inicio.js`): la pantalla de Inicio (vista Finanzas) se dibuja con componentes del celular. Los datos los manda la web (`puente.js`) y cada toque se le pide a la web, así todo funciona igual. "Ahorros y deudas", las demás pestañas y las ventanas siguen siendo la web.
+- **Abre más rápido** (`copia.js`): la app guarda una copia de la página con Firebase incluido y abre desde ahí (con la misma dirección, así la sesión sigue igual). Revisa en segundo plano si hay versión nueva y la usa la próxima vez. Si la copia falla, abre la página normal. Además muestra al instante el último Inicio guardado.
+- **Recordatorios en el celular** (`recordatorios.js`): avisos un día antes (7 p. m.) y el mismo día (8 a. m.) de pagos fijos, pago de tarjetas y cuotas; garantías 30 días, 7 días y el día que vencen (9 a. m.). Se activan en Ajustes → "Recordatorios en el celular" (o al aceptar la pregunta la primera vez).
+
 ## Archivos
 | Archivo | Qué es |
 |---|---|
-| `App.js` | Toda la app |
+| `App.js` | La app: une la web, el Inicio nativo, la copia y los recordatorios |
+| `inicio.js` | Inicio nativo |
+| `puente.js` | Código que corre dentro de la web y le manda datos a la app |
+| `copia.js` | Copia guardada de la página (abrir rápido / sin internet) |
+| `recordatorios.js` | Recordatorios en el celular |
+| `almacen.js` | Guardar y leer archivos en el celular |
 | `index.js` | Arranque |
 | `app.json` | Nombre, ícono, permisos, identificador `com.jimenez19pro.luks` |
 | `eas.json` | Configuración de Expo (EAS) para armar la app |
@@ -24,5 +34,5 @@ dentro de una app.
 | `icon.png`, `icono-fondo.png` | Ícono de Lu-Ks |
 
 ## Siguientes etapas
-- Etapa 2: pasar pantallas a nativo (empezando por las más usadas), inicio de sesión con Google nativo, notificaciones.
+- Etapa 2 (sigue): pasar más pantallas a nativo, inicio de sesión con Google nativo (necesita compilación propia).
 - Etapa 3: publicar en App Store (US$99/año) y Google Play (US$25 una vez).
