@@ -2,7 +2,7 @@
 // Conecta la web con la app: avisos, descargas, botón Atrás, y además
 // manda a la app los datos del Inicio (para el Inicio nativo) y los pagos
 // que vienen (para los recordatorios en el celular).
-export function puente({ version, os, recordatorios }) {
+export function puente({ version, os, recordatorios, sinSplash }) {
   return `(function(){
   if (window.LUKS_APP) return;
   window.LUKS_APP = { v: ${JSON.stringify(version)}, os: ${JSON.stringify(os)} };
@@ -352,8 +352,20 @@ export function puente({ version, os, recordatorios }) {
     post({ t: 'remset', on: v === 'si' });
   }, true);
 
+  /* ---------- La app ya mostró su Inicio: quitar la animación de bienvenida de la web ---------- */
+  // Si no, queda escondida detrás del Inicio nativo y aparece al tocar otra pestaña.
+  var SIN_SPLASH = ${sinSplash ? 'true' : 'false'};
+  function sinAnimacion() {
+    var sp = q('#splash');
+    if (!sp) return;
+    try { sp.click(); } catch (e) {}
+    if (sp.parentNode) sp.parentNode.removeChild(sp);
+    setTimeout(function () { try { if (window.lkAnim) lkAnim(false); } catch (e) {} }, 0);
+  }
+
   /* ---------- Observadores ---------- */
   function start() {
+    if (SIN_SPLASH) sinAnimacion();
     try {
       new MutationObserver(function (ms) {
         for (var i = 0; i < ms.length; i++) {

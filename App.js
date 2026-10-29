@@ -133,7 +133,7 @@ export default function App() {
   const opacity = useRef(new Animated.Value(inicial.snap ? 1 : 0)).current;
 
   const bridge = useMemo(
-    () => puente({ version: VERSION, os: Platform.OS, recordatorios: inicial.prefs.rem }),
+    () => puente({ version: VERSION, os: Platform.OS, recordatorios: inicial.prefs.rem, sinSplash: !!inicial.snap }),
     [inicial.prefs.rem]
   );
 
