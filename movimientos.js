@@ -2,7 +2,7 @@
 // Igual que el Inicio: los datos los manda la web (puente.js → "tx") y cada
 // toque se le pide a la web. La lista usa FlatList (fluida aunque haya muchos).
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Keyboard, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Animated, FlatList, Keyboard, PanResponder, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BarraAbajo, CHEV, Circulo, EYE, EYE_OFF, Ico, Tile, Toque, alfa, altoBarra, css, tema } from './inicio';
 
@@ -181,37 +181,108 @@ function Cabecera({ S, C, f, tap, keep, buscar, guardar, q, setQ, foco, setFoco 
   );
 }
 
-const FilaMov = memo(function FilaMov({ it, ico, C, f, onOpen, primera, ultima }) {
+const ANCHO_ACC = 82;
+const LAPIZ = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>';
+const BASURA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>';
+
+// Fila que se desliza a la izquierda para mostrar Editar y Eliminar (como en Correo del iPhone).
+const FilaMov = memo(function FilaMov({ it, ico, C, f, onOpen, onEdit, onDel, primera, ultima, abierta, lang }) {
+  const x = useRef(new Animated.Value(0)).current;
+  const pos = useRef(0);
+  const max = ANCHO_ACC * 2;
+  const mover = (v, cb) => {
+    pos.current = v;
+    Animated.spring(x, { toValue: v, useNativeDriver: true, bounciness: 0, speed: 20 }).start(cb);
+  };
+  const cerrar = useCallback(() => mover(0), []);
+  const pan = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (e, g) => Math.abs(g.dx) > 10 && Math.abs(g.dx) > Math.abs(g.dy) * 1.6,
+        onPanResponderGrant: () => {
+          x.stopAnimation((v) => (pos.current = v));
+          if (abierta.current && abierta.current !== cerrar) abierta.current();
+        },
+        onPanResponderMove: (e, g) => {
+          let v = pos.current + g.dx;
+          if (v > 0) v = v / 4;
+          if (v < -max) v = -max + (v + max) / 4;
+          x.setValue(v);
+        },
+        onPanResponderRelease: (e, g) => {
+          const v = pos.current + g.dx;
+          if (v < -max * 0.4 || g.vx < -0.5) {
+            mover(-max);
+            abierta.current = cerrar;
+          } else {
+            mover(0);
+            if (abierta.current === cerrar) abierta.current = null;
+          }
+        },
+        onPanResponderTerminate: () => mover(0),
+        onPanResponderTerminationRequest: () => false,
+      }),
+    []
+  );
+  const en = lang === 'en';
+  const tocar = () => {
+    if (pos.current < -4) {
+      cerrar();
+      return;
+    }
+    onOpen(it.id);
+  };
+  const radio = [primera && { borderTopLeftRadius: 20, borderTopRightRadius: 20 }, ultima && { borderBottomLeftRadius: 20, borderBottomRightRadius: 20 }];
   return (
-    <View
-      style={[
-        { backgroundColor: C.sf, paddingHorizontal: 16 },
-        primera && { borderTopLeftRadius: 20, borderTopRightRadius: 20 },
-        ultima && { borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
-      ]}
-    >
-      <Toque onPress={() => onOpen(it.id)} label={it.t}>
-        <View style={[st.fila, !ultima && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.ln }]}>
-          <Circulo ico={ico} z={40} C={C} />
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={{ color: C.ink, fontSize: f(16), fontWeight: '600' }} numberOfLines={1}>
-              {it.t}
-            </Text>
-            <Text style={{ color: C.mut, fontSize: f(13), marginTop: 2 }} numberOfLines={2}>
-              {it.s}
+    <View style={[{ overflow: 'hidden', backgroundColor: C.sf }, radio]}>
+      <View style={[StyleSheet.absoluteFill, { flexDirection: 'row', justifyContent: 'flex-end' }]}>
+        <Toque
+          onPress={() => {
+            cerrar();
+            onEdit(it.id);
+          }}
+          style={[st.acc, { backgroundColor: C.ac }]}
+          label={en ? 'Edit' : 'Editar'}
+        >
+          <Ico xml={LAPIZ} size={20} color="#FFFFFF" />
+          <Text style={st.accT}>{en ? 'Edit' : 'Editar'}</Text>
+        </Toque>
+        <Toque
+          onPress={() => {
+            cerrar();
+            onDel(it);
+          }}
+          style={[st.acc, { backgroundColor: C.neg }]}
+          label={en ? 'Delete' : 'Eliminar'}
+        >
+          <Ico xml={BASURA} size={20} color="#FFFFFF" />
+          <Text style={st.accT}>{en ? 'Delete' : 'Eliminar'}</Text>
+        </Toque>
+      </View>
+      <Animated.View {...pan.panHandlers} style={{ transform: [{ translateX: x }], backgroundColor: C.sf, paddingHorizontal: 16 }}>
+        <Toque onPress={tocar} label={it.t}>
+          <View style={[st.fila, !ultima && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.ln }]}>
+            <Circulo ico={ico} z={40} C={C} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={{ color: C.ink, fontSize: f(16), fontWeight: '600' }} numberOfLines={1}>
+                {it.t}
+              </Text>
+              <Text style={{ color: C.mut, fontSize: f(13), marginTop: 2 }} numberOfLines={2}>
+                {it.s}
+              </Text>
+            </View>
+            {it.p ? <Text style={{ fontSize: f(14) }}>⏳</Text> : null}
+            <Text style={{ color: css(it.ac, C.ink), fontSize: f(15), fontWeight: '600', fontVariant: ['tabular-nums'] }} numberOfLines={1}>
+              {it.a}
             </Text>
           </View>
-          {it.p ? <Text style={{ fontSize: f(14) }}>⏳</Text> : null}
-          <Text style={{ color: css(it.ac, C.ink), fontSize: f(15), fontWeight: '600', fontVariant: ['tabular-nums'] }} numberOfLines={1}>
-            {it.a}
-          </Text>
-        </View>
-      </Toque>
+        </Toque>
+      </Animated.View>
     </View>
   );
 });
 
-function Movimientos({ S, onTap, onKeep, onJs, onRefresh, onNav, onAdd }) {
+function Movimientos({ S, onTap, onKeep, onJs, onRefresh, onNav, onAdd, onEdit }) {
   const ins = useSafeAreaInsets();
   const C = tema(S && S.th);
   const f = useCallback((n) => Math.round(n * C.z * 10) / 10, [C.z]);
@@ -239,6 +310,17 @@ function Movimientos({ S, onTap, onKeep, onJs, onRefresh, onNav, onAdd }) {
     [onJs]
   );
   const guardar = useCallback((v) => buscar(v, true), [buscar]);
+  const abierta = useRef(null);
+  const borrar = useCallback(
+    (it) => {
+      const en = S && S.lang === 'en';
+      Alert.alert(en ? 'Delete this transaction?' : '¿Eliminar este movimiento?', (it.t || '') + '  ' + (it.a || ''), [
+        { text: en ? 'Cancel' : 'Cancelar', style: 'cancel' },
+        { text: en ? 'Delete' : 'Eliminar', style: 'destructive', onPress: () => onJs(`window.__lkDel&&window.__lkDel(${JSON.stringify(String(it.id))})`) },
+      ]);
+    },
+    [onJs, S && S.lang]
+  );
   const abrir = useCallback(
     (id) => {
       Keyboard.dismiss();
@@ -288,6 +370,12 @@ function Movimientos({ S, onTap, onKeep, onJs, onRefresh, onNav, onAdd }) {
         keyExtractor={(x) => x.k}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        onScrollBeginDrag={() => {
+          if (abierta.current) {
+            abierta.current();
+            abierta.current = null;
+          }
+        }}
         contentContainerStyle={{ paddingTop: ins.top + 10, paddingHorizontal: 16, paddingBottom: barAlto + 28 }}
         refreshControl={<RefreshControl refreshing={cargando} onRefresh={refrescar} tintColor={C.mut} colors={[C.ac]} progressViewOffset={ins.top} />}
         showsVerticalScrollIndicator={false}
@@ -309,7 +397,19 @@ function Movimientos({ S, onTap, onKeep, onJs, onRefresh, onNav, onAdd }) {
           item.d != null ? (
             <Text style={{ color: C.mut, fontSize: f(13), fontWeight: '600', textTransform: 'capitalize', marginTop: 18, marginBottom: 6, marginLeft: 4 }}>{item.d}</Text>
           ) : (
-            <FilaMov it={item.it} ico={icons[item.it.i]} C={C} f={f} onOpen={abrir} primera={item.primera} ultima={item.ultima} />
+            <FilaMov
+              it={item.it}
+              ico={icons[item.it.i]}
+              C={C}
+              f={f}
+              onOpen={abrir}
+              onEdit={onEdit}
+              onDel={borrar}
+              abierta={abierta}
+              lang={S.lang}
+              primera={item.primera}
+              ultima={item.ultima}
+            />
           )
         }
       />
@@ -331,4 +431,6 @@ const st = StyleSheet.create({
   sombra: { shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
   tile: { width: 132, borderRadius: 20, padding: 14, borderWidth: 2 },
   fila: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  acc: { width: ANCHO_ACC, alignItems: 'center', justifyContent: 'center', gap: 4 },
+  accT: { color: '#FFFFFF', fontSize: 12, fontWeight: '600' },
 });

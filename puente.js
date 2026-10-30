@@ -255,13 +255,13 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
   var TXMAX = 300;
   function soloTexto(el) {
     if (!el) return '';
-    return [].map.call(el.childNodes, function (n) { return n.nodeType === 3 ? n.textContent : ''; }).join(' ').replace(/\s+/g, ' ').trim();
+    return [].map.call(el.childNodes, function (n) { return n.nodeType === 3 ? n.textContent : ''; }).join(' ').replace(/\\s+/g, ' ').trim();
   }
   function pressed(b) { return b.getAttribute('aria-pressed') === 'true'; }
   function perOf(app) {
     var po = q('#peropen', app), pl = qa('.pnav', app);
     var lab = pl.length ? pl[0].nextElementSibling : null;
-    return po ? { chip: T(po).replace(/\s*⌄\s*$/, ''), cal: svgOf(po), label: lab ? T(lab) : '',
+    return po ? { chip: T(po).replace(/\\s*⌄\\s*$/, ''), cal: svgOf(po), label: lab ? T(lab) : '',
       prev: !!q('.pnav[data-off="-1"]', app), next: !!q('.pnav[data-off="1"]', app),
       nextOff: !!(q('.pnav[data-off="1"]', app) || {}).disabled } : null;
   }
@@ -314,14 +314,232 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
     S.fab = svgOf(q('#add'));
     return S;
   }
+  /* ---------- 5c) Reportes: "espejo" de la pantalla para dibujarla nativa ---------- */
+  function px(v) { var n = parseFloat(v); return isFinite(n) ? Math.round(n * 10) / 10 : 0; }
+  function colorOk(c) { return c && c !== 'transparent' && !/rgba\\([^)]*,\\s*0\\)$/.test(c); }
+  function rutaDe(el) {
+    var parts = [];
+    while (el && el.id !== 'app') {
+      if (el.id && /^[A-Za-z][\\w-]*$/.test(el.id)) { parts.unshift('#' + el.id); return parts.join(' > '); }
+      var i = 1, x = el;
+      while ((x = x.previousElementSibling)) i++;
+      parts.unshift(':nth-child(' + i + ')');
+      el = el.parentElement;
+    }
+    return '#app > ' + parts.join(' > ');
+  }
+  var INLINE = { inline: 1, 'inline-block': 1, 'inline-flex': 1, 'inline-grid': 1, contents: 1 };
+  function tocable(el, cs) {
+    var t = el.tagName;
+    return t === 'BUTTON' || t === 'A' || (cs.cursor === 'pointer' && t !== 'LABEL');
+  }
+  function textoEstilo(cs) {
+    var o = { fs: px(cs.fontSize), fw: cs.fontWeight, c: cs.color };
+    if (cs.fontStyle === 'italic') o.it = 1;
+    if (cs.textTransform && cs.textTransform !== 'none') o.tt = cs.textTransform;
+    if (cs.textDecorationLine && cs.textDecorationLine.indexOf('line-through') >= 0) o.lt = 1;
+    return o;
+  }
+  // SVG con colores y letras ya resueltos (la app no entiende var(--ac) ni style="font:…")
+  function svgListo(el) {
+    var cl = el.cloneNode(true), a = [el].concat([].slice.call(el.querySelectorAll('*'))), b = [cl].concat([].slice.call(cl.querySelectorAll('*')));
+    a.forEach(function (o, i) {
+      var c = b[i], cs = getComputedStyle(o);
+      if (!c || !c.setAttribute) return;
+      var tag = o.tagName.toLowerCase();
+      if (tag !== 'svg' || i > 0) {
+        if (cs.fill && cs.fill !== 'none') c.setAttribute('fill', cs.fill); else if (o.getAttribute('fill') === 'none' || cs.fill === 'none') c.setAttribute('fill', 'none');
+        if (cs.stroke && cs.stroke !== 'none') c.setAttribute('stroke', cs.stroke);
+        if (cs.opacity && cs.opacity !== '1') c.setAttribute('opacity', cs.opacity);
+      }
+      if (tag === 'text' || tag === 'tspan') {
+        c.setAttribute('font-size', px(cs.fontSize));
+        c.setAttribute('font-weight', cs.fontWeight);
+        c.setAttribute('fill', cs.fill && cs.fill !== 'none' ? cs.fill : cs.color);
+        if (cs.textTransform === 'capitalize') c.textContent = (o.textContent || '').replace(/(^|\\s)(\\S)/g, function (m, s1, s2) { return s1 + s2.toUpperCase(); });
+        else if (cs.textTransform === 'uppercase') c.textContent = (o.textContent || '').toUpperCase();
+      }
+      c.removeAttribute('style'); c.removeAttribute('class');
+    });
+    var r = el.getBoundingClientRect();
+    cl.setAttribute('width', Math.round(r.width)); cl.setAttribute('height', Math.round(r.height));
+    if (el.getAttribute('fill') == null && getComputedStyle(el).fill === 'none') cl.setAttribute('fill', 'none');
+    return { k: 'svg', x: cl.outerHTML, w: Math.round(r.width), h: Math.round(r.height) };
+  }
+  // Pedazos de texto en línea (texto, íconos y puntos de color)
+  function enLinea(nodes, out) {
+    nodes.forEach(function (n) {
+      if (n.nodeType === 3) {
+        var t = n.textContent.replace(/\\s+/g, ' ');
+        if (t) out.push({ s: t, st: textoEstilo(getComputedStyle(n.parentElement)) });
+        return;
+      }
+      if (n.nodeType !== 1) return;
+      var cs = getComputedStyle(n);
+      if (cs.display === 'none' || cs.visibility === 'hidden') return;
+      if (n.tagName === 'BR') { out.push({ s: '\\n', st: textoEstilo(cs) }); return; }
+      if (n.tagName === 'svg') { var sv = svgListo(n); out.push({ svg: sv.x, w: sv.w, h: sv.h }); return; }
+      var r = n.getBoundingClientRect();
+      if (cs.display === 'inline-block' || cs.display === 'inline-grid' || cs.display === 'inline-flex') {
+        var inner = n.querySelector('svg');
+        if (inner || !n.textContent.trim()) {
+          out.push({ box: 1, w: Math.round(r.width), h: Math.round(r.height), bg: colorOk(cs.backgroundColor) ? cs.backgroundColor : null,
+            r: px(cs.borderTopLeftRadius), mr: px(cs.marginRight), svg: inner ? svgListo(inner).x : null,
+            sw: inner ? Math.round(inner.getBoundingClientRect().width) : 0 });
+          return;
+        }
+      }
+      enLinea([].slice.call(n.childNodes), out);
+    });
+    return out;
+  }
+  function esLinea(n, padreFlex) {
+    if (n.nodeType === 3) return true;
+    if (n.nodeType !== 1) return true;
+    var cs = getComputedStyle(n);
+    // Dentro de una fila flex o grid, cada elemento es una caja aparte (como en la web).
+    if (padreFlex && cs.display !== 'none' && n.tagName !== 'BR' && (n.textContent.trim() || n.querySelector('svg') || n.getBoundingClientRect().width)) return false;
+    if (cs.display === 'none') return true;
+    if (n.tagName === 'svg') return false;
+    if (n.tagName === 'INPUT' || n.tagName === 'TEXTAREA' || n.tagName === 'BUTTON') return false;
+    return !!INLINE[cs.display] && !(cs.display === 'inline-flex' && n.children.length > 1);
+  }
+  function caja(cs, el, padre) {
+    var o = {};
+    var d = cs.display;
+    if (d === 'flex' || d === 'inline-flex') {
+      o.fd = cs.flexDirection;
+      if (cs.flexWrap === 'wrap') o.fw = 1;
+      if (cs.justifyContent && cs.justifyContent !== 'normal' && cs.justifyContent !== 'flex-start' && cs.justifyContent !== 'start') o.jc = cs.justifyContent;
+      if (cs.alignItems && cs.alignItems !== 'normal' && cs.alignItems !== 'stretch') o.ai = cs.alignItems;
+      var rg = px(cs.rowGap), cg = px(cs.columnGap);
+      if (rg) o.rg = rg; if (cg) o.cg = cg;
+      if ((cs.overflowX === 'auto' || cs.overflowX === 'scroll') && cs.flexWrap !== 'wrap' && cs.flexDirection.indexOf('row') === 0) o.sx = 1;
+    } else if (d === 'grid' || d === 'inline-grid') {
+      var cols = (cs.gridTemplateColumns || '').split(' ').filter(Boolean).length || 1;
+      if (cols > 1) { o.fd = 'row'; o.fw = 1; o.cols = cols; }
+      var rg2 = px(cs.rowGap), cg2 = px(cs.columnGap);
+      if (rg2) o.rg = rg2; if (cg2) o.cg = cg2;
+      if (cs.alignItems && cs.alignItems !== 'normal' && cs.alignItems !== 'stretch') o.ai = cs.alignItems;
+      if (cs.justifyItems === 'center') { o.jc = 'center'; o.ai = o.ai || 'center'; }
+    }
+    var pd = [px(cs.paddingTop), px(cs.paddingRight), px(cs.paddingBottom), px(cs.paddingLeft)];
+    if (pd.some(Boolean)) o.p = pd;
+    var mg = [px(cs.marginTop), px(cs.marginRight), px(cs.marginBottom), px(cs.marginLeft)];
+    if (mg.some(Boolean)) o.m = mg;
+    if (colorOk(cs.backgroundColor)) o.bg = cs.backgroundColor;
+    var br = px(cs.borderTopLeftRadius);
+    if (br) o.br = Math.min(br, 999);
+    ['Top', 'Right', 'Bottom', 'Left'].forEach(function (sd) {
+      var w = px(cs['border' + sd + 'Width']);
+      if (w && cs['border' + sd + 'Style'] !== 'none' && colorOk(cs['border' + sd + 'Color'])) {
+        o['b' + sd[0]] = [w, cs['border' + sd + 'Color']];
+        if (cs['border' + sd + 'Style'] === 'dashed') o.bs = 'dashed';
+      }
+    });
+    if (cs.overflow === 'hidden' || cs.overflowX === 'hidden') o.oh = 1;
+    if (cs.opacity !== '1') o.op = +cs.opacity;
+    var fg = parseFloat(cs.flexGrow);
+    if (padre && /flex/.test(getComputedStyle(padre).display) && fg) o.fg = fg;
+    if (padre && /flex/.test(getComputedStyle(padre).display)) {
+      if (cs.flexShrink === '0') o.fs0 = 1;
+      if (cs.alignSelf && cs.alignSelf !== 'auto') o.as = cs.alignSelf;
+    }
+    if (el.style.width) o.w = el.dataset.w || el.style.width;
+    else if (INLINE[d] && d !== 'inline') {
+      // Botones que en la web ocupan todo el ancho (width:100%) se quedan anchos
+      var pcs = padre ? getComputedStyle(padre) : null, prr = padre ? padre.getBoundingClientRect() : null;
+      var interior = prr ? prr.width - px(pcs.paddingLeft) - px(pcs.paddingRight) : 0;
+      var mio = el.getBoundingClientRect().width + px(cs.marginLeft) + px(cs.marginRight);
+      if (!(interior && mio >= interior - 2) || /flex/.test(pcs.display)) o.as = o.as || 'flex-start';
+    }
+    if (el.style.height || el.style.maxHeight) o.h = px(cs.height);
+    // Círculos y botones redondos (íconos, ‹ ›): conservar su tamaño
+    var rr = el.getBoundingClientRect();
+    if (!o.w && rr.width && Math.abs(rr.width - rr.height) < 1.5 && br >= rr.width / 2 - 1 && rr.width <= 64) { o.w = Math.round(rr.width); o.h = Math.round(rr.height); o.fs0 = 1; }
+    if (cs.position === 'absolute') {
+      o.abs = 1;
+      o.l = el.style.left && /%$/.test(el.style.left) ? el.style.left : px(cs.left);
+      o.t = px(cs.top);
+    } else if (cs.position === 'relative' && padre) o.rel = 1;
+    return o;
+  }
+  function espejo(el, padre) {
+    var cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden') return null;
+    if (el.tagName === 'svg') {
+      var sv = svgListo(el), r0 = el.getBoundingClientRect(), pr = padre && padre.getBoundingClientRect();
+      if (pr && Math.abs((r0.left - pr.left) - (pr.right - r0.right)) < 3 && r0.width < pr.width - 20) sv.c = 1;
+      return sv;
+    }
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+      return { k: 'in', sel: rutaDe(el), id: el.id || null, v: el.value || '', ph: el.getAttribute('placeholder') || '', multi: el.tagName === 'TEXTAREA', ro: !!el.readOnly,
+        st: textoEstilo(cs), b: caja(cs, el, padre) };
+    }
+    var o = { k: 'v', b: caja(cs, el, padre) };
+    if (el.id) o.id = el.id;
+    if (tocable(el, cs)) { o.tap = rutaDe(el); if (el.disabled) o.dis = 1; if (el.getAttribute('aria-pressed') === 'true') o.on = 1; }
+    var kids = [].slice.call(el.childNodes), ch = [], linea = [];
+    function cerrar() {
+      if (!linea.length) return;
+      var runs = enLinea(linea, []);
+      linea = [];
+      while (runs.length && runs[0].s != null && !runs[0].s.trim()) runs.shift();
+      while (runs.length && runs[runs.length - 1].s != null && !runs[runs.length - 1].s.trim()) runs.pop();
+      if (runs.length && runs[0].s != null) runs[0].s = runs[0].s.replace(/^\\s+/, '');
+      if (runs.length && runs[runs.length - 1].s != null) runs[runs.length - 1].s = runs[runs.length - 1].s.replace(/\\s+$/, '');
+      if (!runs.length) return;
+      ch.push({ k: 'p', runs: runs, ta: cs.textAlign === 'center' || cs.textAlign === 'right' || cs.textAlign === 'end' ? (cs.textAlign === 'end' ? 'right' : cs.textAlign) : null,
+        lh: cs.lineHeight !== 'normal' ? px(cs.lineHeight) : null, ws: cs.whiteSpace === 'nowrap' ? 1 : 0, st: textoEstilo(cs) });
+    }
+    var flexP = /flex|grid/.test(cs.display);
+    kids.forEach(function (n) {
+      if (esLinea(n, flexP)) { linea.push(n); return; }
+      cerrar();
+      var c = espejo(n, el);
+      if (c) ch.push(c);
+    });
+    cerrar();
+    if (!ch.length) {
+      var r = el.getBoundingClientRect();
+      if (!r.width && !r.height) return null;
+      if (!o.b.w) o.b.w = Math.round(r.width);
+      o.b.h = Math.round(r.height);
+    }
+    o.ch = ch;
+    return o;
+  }
+  function snapRep() {
+    var app = q('#app');
+    if (!app || !q('h1', app)) return null;
+    var ch = [];
+    [].forEach.call(app.children, function (el) { var c = espejo(el, app); if (c) ch.push(c); });
+    var acs = getComputedStyle(app), ancho = Math.round(app.getBoundingClientRect().width - px(acs.paddingLeft) - px(acs.paddingRight));
+    return { v: 1, lang: window.LKLANG || 'es', hide: !!window.HIDE, th: theme(), tree: ch, ancho: ancho,
+      nav: qa('nav .tab').map(function (b) { return { k: b.dataset.t, t: T(b), svg: svgOf(b) }; }), fab: svgOf(q('#add')) };
+  }
+  // Escribir en un campo de la web desde la app (por ejemplo, el chat financiero)
+  window.__lkIn = function (sel, v) {
+    var e = q(sel);
+    if (!e) return;
+    e.value = v;
+    try { e.dispatchEvent(new Event('input', { bubbles: true })); } catch (x) {}
+  };
+  window.__lkEnter = function (sel) {
+    var e = q(sel);
+    if (!e) return;
+    try { e.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); } catch (x) {}
+    sched();
+  };
   function state() {
     var tb = typeof tab !== 'undefined' ? tab : null, hv = typeof HV !== 'undefined' ? HV : null;
     var out = vis(q('#auth'));
     var home = tb === 'home' && hv === 'fin' && !!q('#app .hd');
     var txv = tb === 'tx' && !!q('#app #q-in');
-    var kind = home ? 'home' : txv ? 'tx' : null;
-    var S = home ? snap() : null, X = txv ? snapTx() : null;
-    return { t: 'state', show: !!(kind && (S || X) && !covered()), kind: kind, out: out, tab: tb, snap: S, tx: X };
+    var repv = tb === 'rep' && !!q('#app h1');
+    var kind = home ? 'home' : txv ? 'tx' : repv ? 'rep' : null;
+    var S = home ? snap() : null, X = txv ? snapTx() : null, R = repv ? snapRep() : null;
+    return { t: 'state', show: !!(kind && (S || X || R) && !covered()), kind: kind, out: out, tab: tb, snap: S, tx: X, rep: R };
   }
   // En Inicio y Movimientos la app dibuja los números: que la web no los "cuente".
   function conFila() {
@@ -333,7 +551,7 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
   function sinConteo() {
     if (typeof window.lkCount !== 'function' || window.lkCount.__lk) return;
     var o = window.lkCount;
-    window.lkCount = function () { try { if (tab === 'home' || tab === 'tx') return; } catch (e) {} return o.apply(this, arguments); };
+    window.lkCount = function () { try { if (tab === 'home' || tab === 'tx' || tab === 'rep') return; } catch (e) {} return o.apply(this, arguments); };
     window.lkCount.__lk = 1;
   }
   var last = '', timer = null, late = null;
@@ -505,6 +723,8 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
   window.__lkSave = function (d) {
     try {
       EDIT = null; PFDATE = null;
+      var ed = d.edit ? txPor(d.edit) : null;
+      if (d.edit && !ed) throw new Error('No encontré ese movimiento. Actualiza e intenta otra vez.');
       fillAcc();
       TP = d.tp;
       selVal('f-amt', String(d.a));
@@ -516,12 +736,43 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
       var hoy = iso(0);
       selVal('f-date', d.date || hoy);
       PFDATE = d.date && d.date !== hoy ? d.date : null;
+      if (ed) { EDIT = ed; PFDATE = d.date && d.date !== ed.date ? d.date : null; }
       syncForm();
       document.getElementById('save').click();
       post({ t: 'saved', ok: true });
     } catch (e) { post({ t: 'saved', ok: false, msg: String(e && e.message || e) }); }
     sched();
   };
+  // Editar un movimiento con el formulario nativo
+  function txPor(id) { return (typeof tx !== 'undefined' ? tx : []).filter(function (x) { return String(x.id) === String(id); })[0]; }
+  window.__lkEditData = function (id) {
+    var t = txPor(id);
+    if (!t) return;
+    if (t.pend) { try { toast('Este movimiento se enviará a tu hoja cuando vuelva la conexión'); } catch (e) {} return; }
+    try { CUR = t; } catch (e) {}
+    var cs = document.getElementById('csheet');
+    if (cs) cs.classList.remove('on');
+    window.__lkFormData();
+    post({ t: 'edit', d: { id: String(t.id), tp: t.tipo || 'out', a: t.amt, mer: t.mer || '', cat: (t.cat in CATS) && t.cat !== 'ing' ? t.cat : '',
+      sub: t.sub || '', acc: t.acc || '', dst: t.dst || '', date: t.date } });
+    sched();
+  };
+  // Eliminar un movimiento (después de confirmar en la app)
+  window.__lkDel = function (id) {
+    var t = txPor(id);
+    if (!t) return;
+    if (t.pend) { try { toast('Este movimiento se enviará a tu hoja cuando vuelva la conexión'); } catch (e) {} return; }
+    try { CUR = t; DELQ = true; delRow(); } catch (e) { post({ t: 'err', where: 'del', msg: String(e && e.message || e) }); }
+    sched();
+  };
+  // "Editar" en el detalle del movimiento → formulario nativo
+  document.addEventListener('click', function (e) {
+    if (!FORM_NATIVO) return;
+    var b = e.target && e.target.closest && e.target.closest('#cedit');
+    if (!b) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    try { if (CUR) window.__lkEditData(CUR.id); } catch (x) {}
+  }, true);
   // Abrir IA o Foto (escanear recibo) de la web desde el formulario nativo
   window.__lkFormWeb = function (k) {
     try {

@@ -3,7 +3,7 @@
 // categoría y subcategoría, cuenta, fecha y descripción. Al guardar, los
 // datos se le pasan a la web (window.__lkSave), que guarda como siempre.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { CHEV, Circulo, Ico, Tile, Toque, alfa, tema } from './inicio';
@@ -28,6 +28,11 @@ function fecha(s) {
 
 const T = {
   nuevo: ['Nuevo movimiento', 'New transaction'],
+  editar: ['Editar movimiento', 'Edit transaction'],
+  guardarC: ['Guardar cambios', 'Save changes'],
+  eliminar: ['Eliminar movimiento', 'Delete transaction'],
+  eliminarQ: ['¿Eliminar este movimiento?', 'Delete this transaction?'],
+  eliminarB: ['Eliminar', 'Delete'],
   cancelar: ['Cancelar', 'Cancel'],
   listo: ['Listo', 'Done'],
   cat: ['Categoría', 'Category'],
@@ -53,7 +58,7 @@ const T = {
   entre: ['Entre cuentas', 'Between accounts'],
 };
 
-export default function Formulario({ visible, datos, onClose, onSave, onWeb }) {
+export default function Formulario({ visible, datos, editar, onClose, onSave, onWeb, onDelete }) {
   const ins = useSafeAreaInsets();
   const D = datos || {};
   const en = D.lang === 'en';
@@ -88,7 +93,19 @@ export default function Formulario({ visible, datos, onClose, onSave, onWeb }) {
     setError('');
     setDia(D.hoy || ymd(new Date()));
     iniciado.current = false;
-  }, [visible]);
+    if (editar) {
+      // Editar: llenar con los datos del movimiento
+      iniciado.current = true;
+      setTp(editar.tp === 'in' || editar.tp === 'tr' ? editar.tp : 'out');
+      setMonto(String(editar.a || ''));
+      setDesc(editar.mer || '');
+      setCat(editar.cat || '');
+      setSub(editar.sub || '');
+      setAcc(editar.acc || '');
+      setDst(editar.dst || '');
+      setDia(editar.date || D.hoy || ymd(new Date()));
+    }
+  }, [visible, editar]);
   // Cuenta principal por defecto cuando llegan los datos.
   useEffect(() => {
     if (visible && D.accs && !iniciado.current) {
@@ -115,7 +132,7 @@ export default function Formulario({ visible, datos, onClose, onSave, onWeb }) {
       setError(t('cuentas'));
       return;
     }
-    onSave({ tp, a, mer: desc.trim(), cat: tp === 'out' ? cat : '', sub: tp === 'out' ? sub : '', acc, dst: tp === 'tr' ? dst : '', date: dia || D.hoy });
+    onSave({ tp, a, mer: desc.trim(), cat: tp === 'out' ? cat : '', sub: tp === 'out' ? sub : '', acc, dst: tp === 'tr' ? dst : '', date: dia || D.hoy, edit: editar ? editar.id : null });
   };
 
   const fechaTxt = (() => {
@@ -282,7 +299,12 @@ export default function Formulario({ visible, datos, onClose, onSave, onWeb }) {
   );
 
   // ---------- Pantalla principal ----------
-  const crear = tp === 'in' ? t('crearIn') : tp === 'tr' ? t('crearTr') : t('crearOut');
+  const crear = editar ? t('guardarC') : tp === 'in' ? t('crearIn') : tp === 'tr' ? t('crearTr') : t('crearOut');
+  const eliminar = () =>
+    Alert.alert(t('eliminarQ'), '', [
+      { text: t('cancelar'), style: 'cancel' },
+      { text: t('eliminarB'), style: 'destructive', onPress: () => onDelete && onDelete(editar.id) },
+    ]);
   const pagMain = (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={[st.row, st.top]}>
@@ -290,19 +312,21 @@ export default function Formulario({ visible, datos, onClose, onSave, onWeb }) {
           <Text style={{ color: C.ac, fontSize: 17 }}>{t('cancelar')}</Text>
         </Toque>
         <Text style={{ flex: 1, textAlign: 'center', color: C.ink, fontSize: 17, fontWeight: '600' }} numberOfLines={1}>
-          {t('nuevo')}
+          {editar ? t('editar') : t('nuevo')}
         </Text>
         <View style={[st.row, { gap: 6, minWidth: 80, justifyContent: 'flex-end' }]}>
-          {D.foto ? (
+          {editar ? null : D.foto ? (
             <Toque onPress={() => onWeb('scan')} style={[st.row, st.fai, { backgroundColor: alfa(C.ac, 0.14) }]} label="Escanear recibo">
               <Ico xml={FOTO} size={15} color={C.ac} />
               <Text style={{ color: C.ac, fontSize: 13, fontWeight: '600' }}>{en ? 'Photo' : 'Foto'}</Text>
             </Toque>
           ) : null}
-          <Toque onPress={() => onWeb('ai')} style={[st.row, st.fai, { backgroundColor: alfa(C.ac, 0.14) }]} label="Anotar con IA">
-            <Ico xml={IA} size={15} color={C.ac} />
-            <Text style={{ color: C.ac, fontSize: 13, fontWeight: '600' }}>IA</Text>
-          </Toque>
+          {editar ? null : (
+            <Toque onPress={() => onWeb('ai')} style={[st.row, st.fai, { backgroundColor: alfa(C.ac, 0.14) }]} label="Anotar con IA">
+              <Ico xml={IA} size={15} color={C.ac} />
+              <Text style={{ color: C.ac, fontSize: 13, fontWeight: '600' }}>IA</Text>
+            </Toque>
+          )}
         </View>
       </View>
 
@@ -342,7 +366,7 @@ export default function Formulario({ visible, datos, onClose, onSave, onWeb }) {
               placeholder="$ 0"
               placeholderTextColor={C.mut}
               keyboardType="number-pad"
-              autoFocus
+              autoFocus={!editar}
               maxLength={21}
               textAlign="center"
               adjustsFontSizeToFit
@@ -392,6 +416,11 @@ export default function Formulario({ visible, datos, onClose, onSave, onWeb }) {
           style={[st.desc, { backgroundColor: C.sf, color: C.ink }]}
         />
         {error ? <Text style={{ color: C.neg, fontSize: 14, textAlign: 'center', marginTop: 12 }}>{error}</Text> : null}
+        {editar ? (
+          <Toque onPress={eliminar} style={[st.btn, { backgroundColor: alfa(C.neg, 0.12), marginTop: 18 }]} label={t('eliminar')}>
+            <Text style={{ color: C.neg, fontSize: 16, fontWeight: '600' }}>{t('eliminar')}</Text>
+          </Toque>
+        ) : null}
       </ScrollView>
 
       <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: Math.max(ins.bottom, 12), backgroundColor: C.bg }}>

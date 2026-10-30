@@ -26,13 +26,14 @@ import { WebView } from 'react-native-webview';
 import Inicio from './inicio';
 import Movimientos from './movimientos';
 import Formulario from './formulario';
+import Reportes from './reportes';
 import { puente } from './puente';
 import { BASE, actualizar, copiaGuardada, marcarMala } from './copia';
 import { borrar, guardarJSON, leerJSON } from './almacen';
 import * as Rec from './recordatorios';
 
 export const WEB = BASE;
-const VERSION = '1.2.0';
+const VERSION = '1.3.0';
 
 // Dominios que se abren dentro de la app. Todo lo demás (WhatsApp, correo,
 // Google Sheets, páginas externas) se abre afuera, en su app o en Safari.
@@ -117,6 +118,8 @@ export default function App() {
 
   const [snap, setSnap] = useState(inicial.snap);
   const [txSnap, setTxSnap] = useState(null);
+  const [repSnap, setRepSnap] = useState(null);
+  const [editar, setEditar] = useState(null);
   const [kind, setKind] = useState('home');
   const [show, setShow] = useState(!!inicial.snap);
   const [formVis, setFormVis] = useState(false);
@@ -293,6 +296,7 @@ export default function App() {
           setShow(false);
           setSnap(null);
           setTxSnap(null);
+          setRepSnap(null);
           setFormVis(false);
           borrar(F_INICIO);
           Rec.apagar();
@@ -307,6 +311,7 @@ export default function App() {
           guardarT.current = setTimeout(() => guardarJSON(F_INICIO, sn), 1200);
         }
         if (m.tx) setTxSnap(m.tx);
+        if (m.rep) setRepSnap(m.rep);
         if (m.snap || (m.tab && m.tab !== 'home')) settled.current = true;
         if (!settled.current && !m.show) return; // todavía cargando: dejar el Inicio guardado
         clearTimeout(showT.current);
@@ -322,6 +327,9 @@ export default function App() {
         setFormData(m);
       } else if (m.t === 'add') {
         abrirForm();
+      } else if (m.t === 'edit') {
+        setEditar(m.d);
+        setFormVis(true);
       } else if (m.t === 'saved') {
         if (!m.ok) Alert.alert('No se pudo guardar', m.msg || 'Intenta otra vez.');
       } else if (m.t === 'toast') {
@@ -374,7 +382,7 @@ export default function App() {
   // Barra de abajo: Inicio y Movimientos son nativos (no se oculta), lo demás es web.
   const onNav = useCallback(
     (k) => {
-      if ((k === 'home' && snap) || (k === 'tx' && txSnap)) {
+      if ((k === 'home' && snap) || (k === 'tx' && txSnap) || (k === 'rep' && repSnap)) {
         clearTimeout(showT.current);
         setKind(k);
         setShow(true);
@@ -383,10 +391,11 @@ export default function App() {
       }
       onTap(`nav .tab[data-t="${k}"]`);
     },
-    [snap, txSnap, onTap]
+    [snap, txSnap, repSnap, onTap]
   );
   /* ---------- Formulario nativo ---------- */
   const abrirForm = useCallback(() => {
+    setEditar(null);
     setFormVis(true);
     js('window.__lkFormData&&window.__lkFormData()');
   }, []);
@@ -394,6 +403,16 @@ export default function App() {
   const guardarForm = useCallback((d) => {
     setFormVis(false);
     js(`window.__lkSave&&window.__lkSave(${JSON.stringify(d)})`);
+  }, []);
+  const onEdit = useCallback((id) => js(`window.__lkEditData&&window.__lkEditData(${JSON.stringify(String(id))})`), []);
+  const borrarMov = useCallback((id) => {
+    setFormVis(false);
+    js(`window.__lkDel&&window.__lkDel(${JSON.stringify(String(id))})`);
+  }, []);
+  const mostrarAviso = useCallback((txt) => {
+    clearTimeout(avisoT.current);
+    setAviso(txt);
+    avisoT.current = setTimeout(() => setAviso(null), 2200);
   }, []);
   const formWeb = useCallback((k) => {
     setFormVis(false);
@@ -484,10 +503,12 @@ export default function App() {
             webviewDebuggingEnabled={__DEV__}
           />
         )}
-        {!failed && ((kind === 'tx' && txSnap) || snap) ? (
+        {!failed && ((kind === 'tx' && txSnap) || (kind === 'rep' && repSnap) || snap) ? (
           <Animated.View style={[StyleSheet.absoluteFill, { opacity }]} pointerEvents={show ? 'auto' : 'none'}>
             {kind === 'tx' && txSnap ? (
-              <Movimientos S={txSnap} onTap={onTap} onKeep={onKeep} onJs={onJs} onRefresh={onRefresh} onNav={onNav} onAdd={abrirForm} />
+              <Movimientos S={txSnap} onTap={onTap} onKeep={onKeep} onJs={onJs} onRefresh={onRefresh} onNav={onNav} onAdd={abrirForm} onEdit={onEdit} />
+            ) : kind === 'rep' && repSnap ? (
+              <Reportes R={repSnap} onTap={onKeep} onJs={onJs} onRefresh={onRefresh} onNav={onNav} onAdd={abrirForm} onAviso={mostrarAviso} />
             ) : (
               <Inicio snap={snap} viejo={viejo} onTap={onTap} onKeep={onKeep} onRefresh={onRefresh} onNav={onNav} onAdd={abrirForm} />
             )}
@@ -500,7 +521,7 @@ export default function App() {
             </View>
           </View>
         ) : null}
-        <Formulario visible={formVis} datos={formData} onClose={cerrarForm} onSave={guardarForm} onWeb={formWeb} />
+        <Formulario visible={formVis} datos={formData} editar={editar} onClose={cerrarForm} onSave={guardarForm} onWeb={formWeb} onDelete={borrarMov} />
       </View>
     </SafeAreaProvider>
   );

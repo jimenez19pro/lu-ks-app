@@ -22,13 +22,19 @@ dentro de una app.
 - **Movimientos nativo** (`movimientos.js`): la pestaña Movimientos con piezas del celular y lista fluida (FlatList): balance, período, filtro, buscador nativo (busca con la misma lógica de la web), recientes, tarjetas de categorías/cuentas y la lista por días. Muestra 300 movimientos y carga más al bajar.
 - **Formulario de anotar nativo** (`formulario.js`): el + abre una hoja de iPhone con teclado numérico (puntos de mil), Gasto/Ingreso/Transferencia, categoría y subcategoría, cuenta, cuenta destino, fecha (Hoy/Ayer/Otra con calendario) y descripción. Guarda con la misma lógica de la web (categoría automática si no se elige). Los botones IA y Foto abren los de la web. Editar un movimiento sigue siendo el formulario web.
 
+## Etapa 2c (30 oct 2026)
+- **Editar con el formulario nativo**: "Editar" en el detalle de un movimiento (y deslizar → Editar) abre el mismo formulario del +, lleno con los datos, con "Guardar cambios" y "Eliminar movimiento".
+- **Deslizar en Movimientos**: deslizar una fila a la izquierda muestra Editar y Eliminar (con confirmación), como en Correo del iPhone.
+- **Reportes nativo** (`reportes.js`): la web manda un "espejo" de la pestaña Reportes (cajas, textos, barras, gráficas SVG, botones y campos) y se dibuja con piezas del celular. Todas las secciones, el chat financiero y Descargar (Copiar usa el portapapeles del celular).
+
 ## Archivos
 | Archivo | Qué es |
 |---|---|
 | `App.js` | La app: une la web, el Inicio nativo, la copia y los recordatorios |
 | `inicio.js` | Inicio nativo (y la barra de abajo compartida) |
 | `movimientos.js` | Movimientos nativo |
-| `formulario.js` | Formulario de anotar nativo |
+| `formulario.js` | Formulario de anotar y editar nativo |
+| `reportes.js` | Reportes nativo |
 | `puente.js` | Código que corre dentro de la web y le manda datos a la app |
 | `copia.js` | Copia guardada de la página (abrir rápido / sin internet) |
 | `recordatorios.js` | Recordatorios en el celular |
