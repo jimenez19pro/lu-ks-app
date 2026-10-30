@@ -24,13 +24,15 @@ import { File, Paths } from 'expo-file-system';
 import { WebView } from 'react-native-webview';
 
 import Inicio from './inicio';
+import Movimientos from './movimientos';
+import Formulario from './formulario';
 import { puente } from './puente';
 import { BASE, actualizar, copiaGuardada, marcarMala } from './copia';
 import { borrar, guardarJSON, leerJSON } from './almacen';
 import * as Rec from './recordatorios';
 
 export const WEB = BASE;
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 
 // Dominios que se abren dentro de la app. Todo lo demás (WhatsApp, correo,
 // Google Sheets, páginas externas) se abre afuera, en su app o en Safari.
@@ -114,7 +116,14 @@ export default function App() {
   };
 
   const [snap, setSnap] = useState(inicial.snap);
+  const [txSnap, setTxSnap] = useState(null);
+  const [kind, setKind] = useState('home');
   const [show, setShow] = useState(!!inicial.snap);
+  const [formVis, setFormVis] = useState(false);
+  const [formData, setFormData] = useState(null);
+  const [aviso, setAviso] = useState(null);
+  const avisoT = useRef(null);
+  const showT = useRef(null);
   const [viejo, setViejo] = useState(!!inicial.snap);
   const [failed, setFailed] = useState(false);
   const [key, setKey] = useState(0);
@@ -133,7 +142,7 @@ export default function App() {
   const opacity = useRef(new Animated.Value(inicial.snap ? 1 : 0)).current;
 
   const bridge = useMemo(
-    () => puente({ version: VERSION, os: Platform.OS, recordatorios: inicial.prefs.rem, sinSplash: !!inicial.snap }),
+    () => puente({ version: VERSION, os: Platform.OS, recordatorios: inicial.prefs.rem, sinSplash: !!inicial.snap, formNativo: true }),
     [inicial.prefs.rem]
   );
 
@@ -283,6 +292,8 @@ export default function App() {
           settled.current = true;
           setShow(false);
           setSnap(null);
+          setTxSnap(null);
+          setFormVis(false);
           borrar(F_INICIO);
           Rec.apagar();
           guardarPrefs({ remFirma: null });
@@ -295,10 +306,28 @@ export default function App() {
           const sn = m.snap;
           guardarT.current = setTimeout(() => guardarJSON(F_INICIO, sn), 1200);
         }
+        if (m.tx) setTxSnap(m.tx);
         if (m.snap || (m.tab && m.tab !== 'home')) settled.current = true;
         if (!settled.current && !m.show) return; // todavía cargando: dejar el Inicio guardado
-        if (m.show && Date.now() - tapAt.current < 350) return; // acabamos de tocar algo
-        setShow(!!m.show);
+        clearTimeout(showT.current);
+        const aplicar = () => {
+          if (m.show && m.kind) setKind(m.kind);
+          setShow(!!m.show);
+        };
+        const pasado = Date.now() - tapAt.current;
+        // Acabamos de tocar algo que abre la web: esperar un momento antes de volver a mostrar.
+        if (m.show && pasado < 350) showT.current = setTimeout(aplicar, 360 - pasado);
+        else aplicar();
+      } else if (m.t === 'form') {
+        setFormData(m);
+      } else if (m.t === 'add') {
+        abrirForm();
+      } else if (m.t === 'saved') {
+        if (!m.ok) Alert.alert('No se pudo guardar', m.msg || 'Intenta otra vez.');
+      } else if (m.t === 'toast') {
+        clearTimeout(avisoT.current);
+        setAviso(m.s);
+        avisoT.current = setTimeout(() => setAviso(null), 2200);
       } else if (m.t === 'rem') {
         remItems.current = m;
         if (prefs.current.rem === true) {
@@ -341,6 +370,37 @@ export default function App() {
     js(`window.__lkTap&&window.__lkTap(${JSON.stringify(sel)})`);
   }, []);
   const onRefresh = useCallback(() => js('window.__lkRefresh&&window.__lkRefresh()'), []);
+  const onJs = useCallback((code) => js(code), []);
+  // Barra de abajo: Inicio y Movimientos son nativos (no se oculta), lo demás es web.
+  const onNav = useCallback(
+    (k) => {
+      if ((k === 'home' && snap) || (k === 'tx' && txSnap)) {
+        clearTimeout(showT.current);
+        setKind(k);
+        setShow(true);
+        js(`window.__lkTap&&window.__lkTap(${JSON.stringify(`nav .tab[data-t="${k}"]`)})`);
+        return;
+      }
+      onTap(`nav .tab[data-t="${k}"]`);
+    },
+    [snap, txSnap, onTap]
+  );
+  /* ---------- Formulario nativo ---------- */
+  const abrirForm = useCallback(() => {
+    setFormVis(true);
+    js('window.__lkFormData&&window.__lkFormData()');
+  }, []);
+  const cerrarForm = useCallback(() => setFormVis(false), []);
+  const guardarForm = useCallback((d) => {
+    setFormVis(false);
+    js(`window.__lkSave&&window.__lkSave(${JSON.stringify(d)})`);
+  }, []);
+  const formWeb = useCallback((k) => {
+    setFormVis(false);
+    tapAt.current = Date.now();
+    setShow(false);
+    setTimeout(() => js(`window.__lkFormWeb&&window.__lkFormWeb(${JSON.stringify(k)})`), 350);
+  }, []);
 
   const onShouldStart = useCallback((req) => {
     const url = req.url || '';
@@ -424,11 +484,23 @@ export default function App() {
             webviewDebuggingEnabled={__DEV__}
           />
         )}
-        {snap && !failed ? (
+        {!failed && ((kind === 'tx' && txSnap) || snap) ? (
           <Animated.View style={[StyleSheet.absoluteFill, { opacity }]} pointerEvents={show ? 'auto' : 'none'}>
-            <Inicio snap={snap} viejo={viejo} onTap={onTap} onKeep={onKeep} onRefresh={onRefresh} />
+            {kind === 'tx' && txSnap ? (
+              <Movimientos S={txSnap} onTap={onTap} onKeep={onKeep} onJs={onJs} onRefresh={onRefresh} onNav={onNav} onAdd={abrirForm} />
+            ) : (
+              <Inicio snap={snap} viejo={viejo} onTap={onTap} onKeep={onKeep} onRefresh={onRefresh} onNav={onNav} onAdd={abrirForm} />
+            )}
           </Animated.View>
         ) : null}
+        {aviso && (show || formVis) ? (
+          <View pointerEvents="none" style={s.avisoW}>
+            <View style={[s.aviso, { backgroundColor: dark ? 'rgba(58,58,60,0.96)' : 'rgba(28,28,30,0.92)' }]}>
+              <Text style={s.avisoT}>{aviso}</Text>
+            </View>
+          </View>
+        ) : null}
+        <Formulario visible={formVis} datos={formData} onClose={cerrarForm} onSave={guardarForm} onWeb={formWeb} />
       </View>
     </SafeAreaProvider>
   );
@@ -442,4 +514,7 @@ const s = StyleSheet.create({
   offText: { fontSize: 16, textAlign: 'center', lineHeight: 22, maxWidth: 320 },
   btn: { marginTop: 12, paddingVertical: 14, paddingHorizontal: 32, borderRadius: 999 },
   btnText: { color: '#FFFFFF', fontSize: 17, fontWeight: '600' },
+  avisoW: { position: 'absolute', left: 0, right: 0, bottom: 120, alignItems: 'center', paddingHorizontal: 24 },
+  aviso: { paddingVertical: 12, paddingHorizontal: 18, borderRadius: 18, maxWidth: 420 },
+  avisoT: { color: '#FFFFFF', fontSize: 15, fontWeight: '500', textAlign: 'center' },
 });

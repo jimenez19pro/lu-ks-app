@@ -24,6 +24,14 @@ export function rgba(c) {
     const p = m[1].split(/[\s,/]+/).filter(Boolean).map(parseFloat);
     return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1];
   }
+  m = /^hsla?\(([^)]+)\)$/i.exec(c);
+  if (m) {
+    const p = m[1].split(/[\s,/]+/).filter(Boolean).map(parseFloat);
+    const h = ((p[0] % 360) + 360) % 360, sl = p[1] / 100, l = p[2] / 100;
+    const k = (n) => (n + h / 30) % 12, a2 = sl * Math.min(l, 1 - l);
+    const fn = (n) => l - a2 * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    return [fn(0) * 255, fn(8) * 255, fn(4) * 255, p.length > 3 ? p[3] : 1];
+  }
   m = /^color\(srgb\s+([^)]+)\)$/i.exec(c);
   if (m) {
     const p = m[1].split(/[\s/]+/).filter(Boolean).map(parseFloat);
@@ -71,20 +79,20 @@ export function tema(th) {
 }
 
 /* ---------- Íconos propios ---------- */
-const EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
-const EYE_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.7 10.7 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6C3.9 8.3 2 12 2 12s3.6 7 10 7a9.8 9.8 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
-const CHEV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
-const PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+export const EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+export const EYE_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.7 10.7 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6C3.9 8.3 2 12 2 12s3.6 7 10 7a9.8 9.8 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
+export const CHEV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
+export const PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
 const WARN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>';
 const GRID = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/></svg>';
 
-function Ico({ xml, size, color }) {
+export function Ico({ xml, size, color }) {
   if (!xml) return null;
   return <SvgXml xml={xml} width={size} height={size} color={color} />;
 }
 
 /* ---------- Piezas ---------- */
-function Toque({ onPress, style, children, label, disabled, hitSlop }) {
+export function Toque({ onPress, style, children, label, disabled, hitSlop }) {
   return (
     <Pressable
       onPress={onPress}
@@ -99,7 +107,7 @@ function Toque({ onPress, style, children, label, disabled, hitSlop }) {
   );
 }
 
-function Barra({ bar, C, alto = 8, track, blanco }) {
+export function Barra({ bar, C, alto = 8, track, blanco }) {
   if (!bar) return null;
   let c = css(bar.c, C.ac);
   if (blanco && igual(bar.c, C.ac)) c = '#FFFFFF';
@@ -110,7 +118,7 @@ function Barra({ bar, C, alto = 8, track, blanco }) {
   );
 }
 
-function Circulo({ ico, z = 40, C }) {
+export function Circulo({ ico, z = 40, C }) {
   if (!ico) return <View style={{ width: z, height: z }} />;
   const c = css(ico.c, C.ac);
   return (
@@ -120,7 +128,7 @@ function Circulo({ ico, z = 40, C }) {
   );
 }
 
-function Tile({ tile, z = 30, C }) {
+export function Tile({ tile, z = 30, C }) {
   if (!tile) return null;
   const bg = css(tile.bg, C.sf2);
   const fg = css(tile.c, C.ink);
@@ -138,7 +146,7 @@ function Tile({ tile, z = 30, C }) {
   );
 }
 
-function Tarjeta({ C, style, children }) {
+export function Tarjeta({ C, style, children }) {
   return <View style={[{ backgroundColor: C.sf, borderRadius: 24, paddingVertical: 14, paddingHorizontal: 16 }, style]}>{children}</View>;
 }
 
@@ -170,7 +178,7 @@ function Titulo({ t, sub, C, f }) {
   );
 }
 
-function Fila({ C, f, ico, t, s, right, onPress, last, pend }) {
+export function Fila({ C, f, ico, t, s, right, onPress, last, pend }) {
   return (
     <Toque onPress={onPress} label={t}>
       <View style={[st.fila, !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.ln }]}>
@@ -193,7 +201,7 @@ function Fila({ C, f, ico, t, s, right, onPress, last, pend }) {
 }
 
 /* ---------- Pantalla ---------- */
-function Inicio({ snap, onTap, onKeep, onRefresh, viejo }) {
+function Inicio({ snap, onTap, onKeep, onRefresh, onNav, onAdd, viejo }) {
   const ins = useSafeAreaInsets();
   const C = tema(snap && snap.th);
   const f = useCallback((n) => Math.round(n * C.z * 10) / 10, [C.z]);
@@ -569,38 +577,49 @@ function Inicio({ snap, onTap, onKeep, onRefresh, viejo }) {
         ) : null}
       </ScrollView>
 
-      {/* Barra de abajo (igual a la de la web) */}
-      <View style={[st.nav, { height: barAlto, paddingBottom: Math.max(ins.bottom, 8), backgroundColor: alfa(C.bg, 0.96), borderTopColor: C.ln }]}>
-        {(snap.nav || []).map((b, i) => {
-          const on = b.k === 'home';
-          const tab = (
-            <Toque key={b.k} onPress={on ? null : () => tap(`nav .tab[data-t="${b.k}"]`)} style={st.tab} label={b.t}>
-              <Ico xml={b.svg} size={25} color={on ? C.ac : C.mut} />
-              <Text style={{ color: on ? C.ac : C.mut, fontSize: 10.5, fontWeight: '500', marginTop: 2 }} numberOfLines={1}>
-                {b.t}
-              </Text>
-            </Toque>
-          );
-          if (i === 2) {
-            return [
-              <View key="fab" style={st.tab}>
-                <Toque onPress={() => tap('#add')} label="Agregar movimiento">
-                  <View style={[st.fab, { backgroundColor: C.ac, shadowColor: C.ac, borderColor: C.bg }]}>
-                    <Ico xml={snap.fab || PLUS} size={30} color="#FFFFFF" />
-                  </View>
-                </Toque>
-              </View>,
-              tab,
-            ];
-          }
-          return tab;
-        })}
-      </View>
+      <BarraAbajo snap={snap} C={C} activo="home" onNav={onNav} onAdd={onAdd} />
     </View>
   );
 }
 
 export default memo(Inicio);
+
+// Barra de abajo (igual a la de la web), compartida por Inicio y Movimientos.
+export function altoBarra(ins) {
+  return 58 + Math.max(ins.bottom, 8);
+}
+export function BarraAbajo({ snap, C, activo, onNav, onAdd }) {
+  const ins = useSafeAreaInsets();
+  const alto = altoBarra(ins);
+  return (
+    <View style={[st.nav, { height: alto, paddingBottom: Math.max(ins.bottom, 8), backgroundColor: alfa(C.bg, 0.96), borderTopColor: C.ln }]}>
+      {(snap.nav || []).map((b, i) => {
+        const on = b.k === activo;
+        const tab = (
+          <Toque key={b.k} onPress={on ? null : () => onNav && onNav(b.k)} style={st.tab} label={b.t}>
+            <Ico xml={b.svg} size={25} color={on ? C.ac : C.mut} />
+            <Text style={{ color: on ? C.ac : C.mut, fontSize: 10.5, fontWeight: '500', marginTop: 2 }} numberOfLines={1}>
+              {b.t}
+            </Text>
+          </Toque>
+        );
+        if (i === 2) {
+          return [
+            <View key="fab" style={st.tab}>
+              <Toque onPress={onAdd} label="Agregar movimiento">
+                <View style={[st.fab, { backgroundColor: C.ac, shadowColor: C.ac, borderColor: C.bg }]}>
+                  <Ico xml={snap.fab || PLUS} size={30} color="#FFFFFF" />
+                </View>
+              </Toque>
+            </View>,
+            tab,
+          ];
+        }
+        return tab;
+      })}
+    </View>
+  );
+}
 
 const st = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },

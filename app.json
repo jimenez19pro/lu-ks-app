@@ -51,7 +51,8 @@
         {
           "color": "#007AFF"
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "owner": "lu-ks-app",
     "runtimeVersion": {

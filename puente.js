@@ -2,7 +2,7 @@
 // Conecta la web con la app: avisos, descargas, botón Atrás, y además
 // manda a la app los datos del Inicio (para el Inicio nativo) y los pagos
 // que vienen (para los recordatorios en el celular).
-export function puente({ version, os, recordatorios, sinSplash }) {
+export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
   return `(function(){
   if (window.LUKS_APP) return;
   window.LUKS_APP = { v: ${JSON.stringify(version)}, os: ${JSON.stringify(os)} };
@@ -64,6 +64,19 @@ export function puente({ version, os, recordatorios, sinSplash }) {
     sched();
     return true;
   };
+  // Buscar en Movimientos (desde el buscador nativo)
+  window.__lkQ = function (v, guardar) {
+    try {
+      Q = String(v == null ? '' : v);
+      var e = document.getElementById('q-in');
+      if (e) e.value = Q;
+      if (typeof qPaint === 'function') qPaint();
+      if (guardar && typeof qRecSave === 'function') qRecSave(Q);
+    } catch (e) {}
+    sched();
+  };
+  // Cargar más movimientos en la lista nativa
+  window.__lkMore = function () { TXMAX += 300; sched(); };
   window.__lkRefresh = function () {
     try { if (window.MCP) MCP.invalidate(SRV, 'get_values'); } catch (e) {}
     sched();
@@ -88,7 +101,7 @@ export function puente({ version, os, recordatorios, sinSplash }) {
   function bar(el) {
     var i = el && q('i', el);
     if (!i) return null;
-    var w = parseFloat(i.style.width);
+    var w = parseFloat(i.dataset.w || i.style.width);
     return { w: isFinite(w) ? Math.max(0, Math.min(100, w)) : 0, c: bg(i) };
   }
   function ico(el) {
@@ -238,17 +251,90 @@ export function puente({ version, os, recordatorios, sinSplash }) {
     S.fab = svgOf(q('#add'));
     return S;
   }
+  /* ---------- 5b) Datos de Movimientos para la app ---------- */
+  var TXMAX = 300;
+  function soloTexto(el) {
+    if (!el) return '';
+    return [].map.call(el.childNodes, function (n) { return n.nodeType === 3 ? n.textContent : ''; }).join(' ').replace(/\s+/g, ' ').trim();
+  }
+  function pressed(b) { return b.getAttribute('aria-pressed') === 'true'; }
+  function perOf(app) {
+    var po = q('#peropen', app), pl = qa('.pnav', app);
+    var lab = pl.length ? pl[0].nextElementSibling : null;
+    return po ? { chip: T(po).replace(/\s*⌄\s*$/, ''), cal: svgOf(po), label: lab ? T(lab) : '',
+      prev: !!q('.pnav[data-off="-1"]', app), next: !!q('.pnav[data-off="1"]', app),
+      nextOff: !!(q('.pnav[data-off="1"]', app) || {}).disabled } : null;
+  }
+  function snapTx() {
+    var app = q('#app'), qi = q('#q-in', app);
+    if (!qi) return null;
+    var S = { v: 1, lang: window.LKLANG || 'es', hide: !!window.HIDE, th: theme() };
+    var h1 = q('h1', app), right = h1 && h1.nextElementSibling;
+    var rl = right && q('.mut', right), rv = right && q('.num', right);
+    S.hd = { t: T(h1), lb: soloTexto(rl), v: T(rv), vc: col(rv) };
+    S.per = perOf(app);
+    var fo = q('#fopen', app);
+    S.fil = fo ? { t: T(fo), on: pressed(fo) } : null;
+    S.q = { v: qi.value || '', ph: qi.getAttribute('placeholder') || '' };
+    var qt = q('#qtop', app);
+    var rlb = qt && q('span.mut', qt), rclr = qt && q('#qrclr', qt);
+    S.rec = { lb: rlb ? T(rlb) : '', clr: rclr ? T(rclr) : '', items: qa('[data-qr]', qt).map(function (b) { return b.dataset.qr; }) };
+    S.qall = qa('[data-qall]', qt).map(function (b) { return { k: b.dataset.qall, t: T(b), on: pressed(b) }; });
+    var qs = qt && q('.qsum', qt);
+    S.qsum = qs ? [].slice.call(qs.children).map(function (c) {
+      var v = q('span', c);
+      return { lb: v ? T(c).replace(T(v), '').trim() : T(c), v: v ? T(v) : '', c: v ? col(v) : null, b: c.tagName === 'B' };
+    }) : null;
+    S.sv = qa('[data-sv]', app).map(function (b) { return { k: b.dataset.sv, t: T(b), on: pressed(b) }; });
+    S.tiles = qa('.tile[data-tl]', app).map(function (b) {
+      var c = q('.ci', b), st = q('.stile', b), lb = q('.mut', b), v = q('.num', b), vs = v && q('span', v);
+      return { k: b.dataset.tl, on: pressed(b), ico: c ? ico(c) : null, tile: st ? tile(st) : null,
+        e: !c && !st && b.firstElementChild ? T(b.firstElementChild) : null, lb: T(lb), v: T(v), vc: col(vs || v) };
+    });
+    var tl = q('#txlist', app), icons = [], ik = {}, items = [], n = 0, total = 0;
+    function icoKey(el) {
+      var o = ico(el), k = JSON.stringify(o);
+      if (ik[k] == null) { ik[k] = icons.length; icons.push(o); }
+      return ik[k];
+    }
+    if (tl) [].forEach.call(tl.children, function (ch) {
+      if (ch.classList.contains('day')) { if (n < TXMAX) items.push({ d: T(ch) }); return; }
+      var r = q('.row[data-id]', ch);
+      if (!r) { if (!n && !items.length) S.empty = T(ch); return; }
+      total++;
+      if (n >= TXMAX) return;
+      n++;
+      var a = q('.amt', r);
+      items.push({ id: r.dataset.id, i: icoKey(q('.ci', r)), t: T(q('.t', r)), s: T(q('.mut', r)), a: T(a), ac: col(a), p: !!q('span[title]', r) });
+    });
+    while (items.length && items[items.length - 1].d != null) items.pop();
+    var h2 = tl && tl.previousElementSibling;
+    S.list = { t: h2 ? T(h2) : '', items: items, icons: icons, total: total, more: total > n };
+    S.nav = qa('nav .tab').map(function (b) { return { k: b.dataset.t, t: T(b), svg: svgOf(b) }; });
+    S.fab = svgOf(q('#add'));
+    return S;
+  }
   function state() {
     var tb = typeof tab !== 'undefined' ? tab : null, hv = typeof HV !== 'undefined' ? HV : null;
     var out = vis(q('#auth'));
     var home = tb === 'home' && hv === 'fin' && !!q('#app .hd');
-    var S = home ? snap() : null;
-    return { t: 'state', show: !!(home && S && !covered()), out: out, tab: tb, snap: S };
+    var txv = tb === 'tx' && !!q('#app #q-in');
+    var kind = home ? 'home' : txv ? 'tx' : null;
+    var S = home ? snap() : null, X = txv ? snapTx() : null;
+    return { t: 'state', show: !!(kind && (S || X) && !covered()), kind: kind, out: out, tab: tb, snap: S, tx: X };
+  }
+  // En Inicio y Movimientos la app dibuja los números: que la web no los "cuente".
+  function sinConteo() {
+    if (typeof window.lkCount !== 'function' || window.lkCount.__lk) return;
+    var o = window.lkCount;
+    window.lkCount = function () { try { if (tab === 'home' || tab === 'tx') return; } catch (e) {} return o.apply(this, arguments); };
+    window.lkCount.__lk = 1;
   }
   var last = '', timer = null, late = null;
   function send() {
     timer = null;
     var s;
+    try { sinConteo(); } catch (e) {}
     try { s = state(); } catch (e) { post({ t: 'err', where: 'state', msg: String(e && e.message || e) }); return; }
     var k = JSON.stringify(s);
     if (k !== last) { last = k; post(s); }
@@ -363,9 +449,110 @@ export function puente({ version, os, recordatorios, sinSplash }) {
     setTimeout(function () { try { if (window.lkAnim) lkAnim(false); } catch (e) {} }, 0);
   }
 
+  /* ---------- 8) Formulario de anotar nativo ---------- */
+  var FORM_NATIVO = ${formNativo ? 'true' : 'false'};
+  function nodo(h) { var d = document.createElement('div'); d.innerHTML = h || ''; return d; }
+  function icoH(h) {
+    var d = nodo(h), c = q('.ci', d) || d.firstElementChild;
+    if (!c) return null;
+    var sv = q('svg', c);
+    return { svg: sv ? sv.outerHTML : null, e: sv ? null : (c.textContent || '').trim(), c: (c.style.getPropertyValue('--c') || '').trim() };
+  }
+  function tileH(h) {
+    var d = nodo(h), st = q('.stile', d) || d.firstElementChild;
+    if (!st) return null;
+    var sv = q('svg', st);
+    return { svg: sv ? sv.outerHTML : null, t: sv ? '' : (st.textContent || '').trim(), bg: st.style.backgroundColor || st.style.background || '', c: st.style.color || '' };
+  }
+  var TRf = function (s) { try { return window.LKTR ? (LKTR(s) || s) : s; } catch (e) { return s; } };
+  window.__lkFormData = function () {
+    try {
+      var cats = Object.keys(CATS).filter(function (k) { return k !== 'ing'; }).map(function (k) {
+        return { k: k, n: TRf(CATS[k][0]), ico: icoH(ci(k, 44)), subs: (SUBS[k] || []).map(function (x) { return { v: x, t: TRf(x) }; }) };
+      });
+      var accs = [''].concat(allAcc().filter(function (k) { return k !== 'Sin cuenta' && k !== 'Sin tarjeta'; })).map(function (n) {
+        var a = accDisp(n);
+        return { n: n, lb: TRf(a.n), s: TRf(a.s), tile: tileH(a.i) };
+      });
+      var pa = ACC.filter(function (a) { return a.pri; })[0];
+      var tp = {};
+      ['out', 'in', 'tr'].forEach(function (k) {
+        tp[k] = { svg: '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + TPI[k][0] + '</svg>', t: TRf(TPI[k][1]) };
+      });
+      var d = { t: 'form', cats: cats, accs: accs, def: pa ? pa.n : '', hoy: iso(0), ayer: iso(1), tp: tp, foto: false,
+        lang: window.LKLANG || 'es', th: theme() };
+      post(d);
+      try {
+        if (window.claude && claude.use) claude.use('sample').then(function (sm) { return sm ? sm.limits() : null; }).then(function (l) {
+          if (l && l.images) { d.foto = true; post(d); }
+        }).catch(function () {});
+      } catch (e) {}
+    } catch (e) { post({ t: 'err', where: 'form', msg: String(e && e.message || e) }); }
+  };
+  function selVal(id, v) {
+    var e = document.getElementById(id);
+    if (!e) return;
+    e.value = v;
+    if (e.tagName === 'SELECT' && v && e.value !== v) { var o = document.createElement('option'); o.textContent = v; e.appendChild(o); e.value = v; }
+  }
+  window.__lkSave = function (d) {
+    try {
+      EDIT = null; PFDATE = null;
+      fillAcc();
+      TP = d.tp;
+      selVal('f-amt', String(d.a));
+      selVal('f-mer', d.mer || '');
+      selVal('f-cat', d.tp === 'out' ? (d.cat || '') : '');
+      selVal('f-sub', d.tp === 'out' ? (d.sub || '') : '');
+      selVal('f-acc', d.acc || '');
+      selVal('f-dst', d.tp === 'tr' ? (d.dst || '') : '');
+      var hoy = iso(0);
+      selVal('f-date', d.date || hoy);
+      PFDATE = d.date && d.date !== hoy ? d.date : null;
+      syncForm();
+      document.getElementById('save').click();
+      post({ t: 'saved', ok: true });
+    } catch (e) { post({ t: 'saved', ok: false, msg: String(e && e.message || e) }); }
+    sched();
+  };
+  // Abrir IA o Foto (escanear recibo) de la web desde el formulario nativo
+  window.__lkFormWeb = function (k) {
+    try {
+      var b = document.createElement('button');
+      if (k === 'cats') b.dataset.s2 = 'cats';
+      else if (k === 'acc') b.id = 'pk-addacc';
+      else b.dataset.hm = k;
+      b.style.display = 'none';
+      document.body.appendChild(b); b.click(); b.remove();
+    } catch (e) {}
+    sched();
+  };
+  // El botón + de la web abre el formulario nativo
+  document.addEventListener('click', function (e) {
+    if (!FORM_NATIVO) return;
+    var b = e.target && e.target.closest && e.target.closest('#add');
+    if (!b) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    post({ t: 'add' });
+  }, true);
+  // Avisos cortos de la web (toast) → la app los muestra encima de lo nativo
+  var lastToast = '', lastToastAt = 0;
+  function toastObs() {
+    var t = document.getElementById('toast');
+    if (!t) return;
+    new MutationObserver(function () {
+      if (!t.classList.contains('on')) return;
+      var s = T(t), now = Date.now();
+      if (!s || (s === lastToast && now - lastToastAt < 1500)) return;
+      lastToast = s; lastToastAt = now;
+      post({ t: 'toast', s: s });
+    }).observe(t, { attributes: true, attributeFilter: ['class'], childList: true, characterData: true, subtree: true });
+  }
+
   /* ---------- Observadores ---------- */
   function start() {
     if (SIN_SPLASH) sinAnimacion();
+    try { toastObs(); } catch (e) {}
     try {
       new MutationObserver(function (ms) {
         for (var i = 0; i < ms.length; i++) {
