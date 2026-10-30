@@ -324,6 +324,12 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
     return { t: 'state', show: !!(kind && (S || X) && !covered()), kind: kind, out: out, tab: tb, snap: S, tx: X };
   }
   // En Inicio y Movimientos la app dibuja los números: que la web no los "cuente".
+  function conFila() {
+    if (typeof window.render !== 'function' || window.render.__lkRem) return;
+    var o = window.render;
+    window.render = function () { var r = o.apply(this, arguments); try { remRow(); } catch (e) {} return r; };
+    window.render.__lkRem = 1;
+  }
   function sinConteo() {
     if (typeof window.lkCount !== 'function' || window.lkCount.__lk) return;
     var o = window.lkCount;
@@ -335,6 +341,7 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
     timer = null;
     var s;
     try { sinConteo(); } catch (e) {}
+    try { conFila(); } catch (e) {}
     try { s = state(); } catch (e) { post({ t: 'err', where: 'state', msg: String(e && e.message || e) }); return; }
     var k = JSON.stringify(s);
     if (k !== last) { last = k; post(s); }
@@ -555,6 +562,9 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
     try { toastObs(); } catch (e) {}
     try {
       new MutationObserver(function (ms) {
+        // Si la web volvió a dibujar Ajustes, poner la fila de Recordatorios ya
+        // (antes de que se pinte la pantalla), para que no parpadee.
+        try { remRow(); } catch (e) {}
         for (var i = 0; i < ms.length; i++) {
           var t = ms[i].target;
           if (t && t.id === 'toast') continue;
