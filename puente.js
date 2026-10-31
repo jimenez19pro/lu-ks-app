@@ -60,7 +60,8 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
     var el = null;
     try { el = document.querySelector(sel); } catch (e) {}
     if (!el) { sched(); return false; }
-    el.click();
+    if (typeof el.click === 'function') el.click();
+    else el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     sched();
     return true;
   };
@@ -361,10 +362,34 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
       }
       c.removeAttribute('style'); c.removeAttribute('class');
     });
+    // Textos vacíos dentro del SVG: en el iPhone pueden cortar el dibujo → quitarlos
+    [].slice.call(cl.querySelectorAll('text,tspan')).forEach(function (t) { if (!(t.textContent || '').trim()) t.parentNode.removeChild(t); });
+    // SVG dentro de otro SVG (íconos de la gráfica de barras): el iPhone no los ubica bien → pasarlos a <g> con translate/scale
+    [].slice.call(cl.querySelectorAll('svg')).forEach(function (ns) {
+      var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      var x = parseFloat(ns.getAttribute('x')) || 0, y = parseFloat(ns.getAttribute('y')) || 0;
+      var w = parseFloat(ns.getAttribute('width')), h = parseFloat(ns.getAttribute('height'));
+      var vb = (ns.getAttribute('viewBox') || '').split(/[\\s,]+/).map(parseFloat);
+      var sx = vb.length === 4 && vb[2] && w ? w / vb[2] : 1, sy = vb.length === 4 && vb[3] && h ? h / vb[3] : 1;
+      var tr = 'translate(' + x + ' ' + y + ') scale(' + sx + ' ' + sy + ')' + (vb.length === 4 && (vb[0] || vb[1]) ? ' translate(' + (-vb[0]) + ' ' + (-vb[1]) + ')' : '');
+      g.setAttribute('transform', tr);
+      [].slice.call(ns.attributes).forEach(function (a) {
+        if (!/^(x|y|width|height|viewBox|xmlns|xmlns:xlink|preserveAspectRatio)$/.test(a.name)) g.setAttribute(a.name, a.value);
+      });
+      while (ns.firstChild) g.appendChild(ns.firstChild);
+      ns.parentNode.replaceChild(g, ns);
+    });
     var r = el.getBoundingClientRect();
     cl.setAttribute('width', Math.round(r.width)); cl.setAttribute('height', Math.round(r.height));
     if (el.getAttribute('fill') == null && getComputedStyle(el).fill === 'none') cl.setAttribute('fill', 'none');
-    return { k: 'svg', x: cl.outerHTML, w: Math.round(r.width), h: Math.round(r.height) };
+    // Zonas tocables de la gráfica (barras y meses)
+    var zonas = [];
+    [].forEach.call(el.querySelectorAll('rect[data-lk]'), function (z) {
+      var zr = z.getBoundingClientRect();
+      if (!zr.width || !zr.height) return;
+      zonas.push({ x: Math.round(zr.left - r.left), y: Math.round(zr.top - r.top), w: Math.round(zr.width), h: Math.round(zr.height), sel: rutaDe(z) });
+    });
+    return { k: 'svg', x: cl.outerHTML, w: Math.round(r.width), h: Math.round(r.height), z: zonas.length ? zonas : undefined };
   }
   // Pedazos de texto en línea (texto, íconos y puntos de color)
   function enLinea(nodes, out) {
@@ -423,6 +448,8 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
       if (cs.alignItems && cs.alignItems !== 'normal' && cs.alignItems !== 'stretch') o.ai = cs.alignItems;
       if (cs.justifyItems === 'center') { o.jc = 'center'; o.ai = o.ai || 'center'; }
     }
+    // Los botones de la web centran su contenido (por ejemplo, la flecha de enviar del chat)
+    if (el.tagName === 'BUTTON' && !/flex|grid/.test(d)) { o.jc = 'center'; o.ai = 'center'; }
     var pd = [px(cs.paddingTop), px(cs.paddingRight), px(cs.paddingBottom), px(cs.paddingLeft)];
     if (pd.some(Boolean)) o.p = pd;
     var mg = [px(cs.marginTop), px(cs.marginRight), px(cs.marginBottom), px(cs.marginLeft)];

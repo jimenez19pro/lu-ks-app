@@ -107,9 +107,8 @@ function Pedazos({ n, C, tap, onTap }) {
           );
         }
         if (r.box) {
-          return (
+          const caja = (
             <View
-              key={i}
               style={{
                 width: r.w,
                 height: r.h,
@@ -123,6 +122,15 @@ function Pedazos({ n, C, tap, onTap }) {
             >
               {r.svg ? <Ico xml={r.svg} size={r.sw || Math.round(r.w * 0.6)} /> : null}
             </View>
+          );
+          // Espacio después del punto de color (el margen no se respeta dentro de un texto)
+          return r.mr ? (
+            <Text key={i}>
+              {caja}
+              {' '}
+            </Text>
+          ) : (
+            <Text key={i}>{caja}</Text>
           );
         }
         if (r.svg) {
@@ -182,6 +190,16 @@ function Nodo({ n, C, ctx, ancho }) {
     return (
       <View style={[{ width: w, height: h }, n.c ? { alignSelf: 'center' } : null]}>
         <SvgXml xml={n.x} width={w} height={h} />
+        {(n.z || []).map((z, i) => {
+          const k = n.w ? w / n.w : 1;
+          return (
+            <Toque
+              key={i}
+              onPress={() => ctx.onTap(z.sel)}
+              style={{ position: 'absolute', left: z.x * k, top: z.y * k, width: Math.max(z.w * k, 24), height: Math.max(z.h * k, 24) }}
+            />
+          );
+        })}
       </View>
     );
   }
