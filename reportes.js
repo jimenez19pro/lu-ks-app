@@ -5,11 +5,14 @@
 // pantalla ya dibujada (cajas, textos, barras, gráficas en SVG, botones y
 // campos) y aquí se dibuja con piezas del celular. Cada toque se le pide a la web.
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
 import { SvgXml } from 'react-native-svg';
-import { BarraAbajo, Ico, Toque, altoBarra, css, tema } from './inicio';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BarraAbajo, CHEV, Ico, Toque, altoBarra, css, tema } from './inicio';
+
+const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
 const PESO = { normal: '400', bold: '700', bolder: '800', lighter: '300' };
 function peso(w) {
@@ -88,6 +91,11 @@ function estiloCaja(b, ancho) {
     o.position = 'absolute';
     o.left = dim(b.l);
     o.top = b.t;
+  }
+  if (b.ring) {
+    // anillo de selección: se dibuja como borde
+    o.borderWidth = b.ring[0];
+    o.borderColor = css(b.ring[1], 'transparent');
   }
   if (b.cols && ancho) o._cols = b.cols;
   return o;
@@ -174,10 +182,71 @@ function Campo({ n, C, onIn, onEnter }) {
       placeholderTextColor={C.mut}
       multiline={!!n.multi}
       editable={!n.ro}
-      returnKeyType="send"
+      returnKeyType={n.id === 'ai-q' ? 'send' : 'done'}
+      keyboardType={n.tipo === 'number' || /numeric|decimal/.test(n.im || '') ? (/decimal/.test(n.im || '') ? 'decimal-pad' : 'number-pad') : n.tipo === 'email' ? 'email-address' : 'default'}
+      secureTextEntry={n.tipo === 'password'}
+      autoCapitalize={n.tipo === 'email' || n.tipo === 'password' ? 'none' : 'sentences'}
       blurOnSubmit
       style={[st, { flex: 1, minHeight: 44, paddingHorizontal: 14, paddingVertical: 10 }]}
     />
+  );
+}
+
+function Degradado({ g, radio }) {
+  const colores = g.s.map((x) => css(x[0], '#000'));
+  const n = g.s.length;
+  const pos = g.s.map((x, i) => (x[1] != null ? x[1] : i / (n - 1)));
+  // Dirección del degradado según el ángulo de CSS (0° = hacia arriba, 90° = hacia la derecha)
+  const r = (((g.a || 180) - 90) * Math.PI) / 180;
+  const dx = Math.cos(r) / 2, dy = Math.sin(r) / 2;
+  return (
+    <LinearGradient
+      colors={colores}
+      locations={pos}
+      start={{ x: 0.5 - dx, y: 0.5 - dy }}
+      end={{ x: 0.5 + dx, y: 0.5 + dy }}
+      style={[StyleSheet.absoluteFill, radio ? { borderRadius: radio } : null]}
+    />
+  );
+}
+
+// Lista desplegable de la web (select) → lista nativa
+function Selector({ n, C, onSel, L }) {
+  const [abierto, setAbierto] = useState(false);
+  const actual = (n.opts || []).find((o) => o.v === n.v);
+  return (
+    <>
+      <Toque onPress={() => setAbierto(true)} style={[estiloCaja(n.b), { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.sf2, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 }]}>
+        <Text style={[estiloTexto(n.st, C), { flex: 1 }]} numberOfLines={1}>
+          {actual ? actual.t : ''}
+        </Text>
+        <View style={{ transform: [{ rotate: '90deg' }] }}>
+          <Ico xml={CHEV} size={14} color={C.mut} />
+        </View>
+      </Toque>
+      <Modal visible={abierto} transparent animationType="fade" onRequestClose={() => setAbierto(false)}>
+        <Toque onPress={() => setAbierto(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: C.sf, borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingBottom: 34, maxHeight: '70%' }}>
+            <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 10 }}>
+              {(n.opts || []).map((o, i) => (
+                <Toque
+                  key={i}
+                  onPress={() => {
+                    setAbierto(false);
+                    onSel(n.sel, o.v);
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: i < n.opts.length - 1 ? StyleSheet.hairlineWidth : 0, borderBottomColor: C.ln }}>
+                    <Text style={{ flex: 1, color: C.ink, fontSize: 17 }}>{o.t}</Text>
+                    {o.v === n.v ? <Ico xml={CHECK} size={18} color={C.ac} /> : null}
+                  </View>
+                </Toque>
+              ))}
+            </ScrollView>
+          </View>
+        </Toque>
+      </Modal>
+    </>
   );
 }
 
@@ -204,6 +273,14 @@ function Nodo({ n, C, ctx, ancho }) {
     );
   }
   if (n.k === 'in') return <Campo n={n} C={C} onIn={ctx.onIn} onEnter={ctx.onEnter} />;
+  if (n.k === 'sel') return <Selector n={n} C={C} onSel={ctx.onSel} />;
+  if (n.k === 'chk') {
+    return (
+      <Toque onPress={() => ctx.onTap(n.sel)} style={[estiloCaja(n.b), { width: 24, height: 24, borderRadius: n.radio ? 12 : 7, borderWidth: 2, borderColor: n.on ? C.ac : C.mut, backgroundColor: n.on ? C.ac : 'transparent', alignItems: 'center', justifyContent: 'center' }]}>
+        {n.on ? <Ico xml={CHECK} size={14} color="#FFFFFF" /> : null}
+      </Toque>
+    );
+  }
   if (n.k !== 'v') return null;
   const est = estiloCaja(n.b, ancho) || {};
   const cols = est._cols;
@@ -236,23 +313,46 @@ function Nodo({ n, C, ctx, ancho }) {
       </ScrollView>
     );
   }
+  // Fondo con degradado
+  const fondo = n.b && n.b.grad ? <Degradado g={n.b.grad} radio={est.borderRadius} /> : null;
   if (n.tap) {
     return (
-      <Toque onPress={n.dis ? null : () => ctx.onTap(n.tap)} disabled={!!n.dis} style={[est, n.dis ? { opacity: 0.5 } : null]}>
+      <Toque onPress={n.dis ? null : () => ctx.onTap(n.tap)} disabled={!!n.dis} style={[est, fondo ? { overflow: 'hidden' } : null, n.dis ? { opacity: 0.5 } : null]}>
+        {fondo}
         {hijos}
       </Toque>
     );
   }
-  return <View style={est}>{hijos}</View>;
+  return (
+    <View style={[est, fondo ? { overflow: 'hidden' } : null]}>
+      {fondo}
+      {hijos}
+    </View>
+  );
 }
 
-function Reportes({ R, onTap, onJs, onRefresh, onNav, onAdd, onAviso }) {
+function Reportes({ R, onTap, onJs, onRefresh, onNav, onAdd, onAviso, irA, onIrA }) {
   const ins = useSafeAreaInsets();
   const C = tema(R && R.th);
   const [cargando, setCargando] = useState(false);
   const csv = useRef('');
   const onIn = useCallback((sel, v) => onJs(`window.__lkIn&&window.__lkIn(${JSON.stringify(sel)},${JSON.stringify(v)})`), [onJs]);
   const onEnter = useCallback((sel) => onJs(`window.__lkEnter&&window.__lkEnter(${JSON.stringify(sel)})`), [onJs]);
+  const onSel = useCallback((sel, v) => onJs(`window.__lkSel&&window.__lkSel(${JSON.stringify(sel)},${JSON.stringify(v)})`), [onJs]);
+  const scroll = useRef(null);
+  const posY = useRef({});
+  // Ir a una sección (desde el menú): buscar el título que empieza con ese texto
+  useEffect(() => {
+    if (!irA || !R) return;
+    const t = setTimeout(() => {
+      const txt = (x) => (x && x.k === 'p' ? x.runs.map((r) => r.s || '').join('') : x && x.ch && x.ch[0] ? txt(x.ch[0]) : '');
+      const i = R.tree.findIndex((x) => txt(x).trim().indexOf(irA) === 0);
+      if (i >= 0 && posY.current[i] != null && scroll.current) scroll.current.scrollTo({ y: Math.max(0, posY.current[i] - 8), animated: true });
+      else if (scroll.current) scroll.current.scrollTo({ y: 0, animated: false });
+      onIrA && onIrA();
+    }, 250);
+    return () => clearTimeout(t);
+  }, [irA, R]);
   if (!R) return null;
   // Texto del CSV (si ya se generó) para el botón "Copiar"
   const buscar = (ns) => {
@@ -268,6 +368,7 @@ function Reportes({ R, onTap, onJs, onRefresh, onNav, onAdd, onAviso }) {
     onTap,
     onIn,
     onEnter,
+    onSel,
     copiar: async () => {
       if (!csv.current) return;
       await Clipboard.setStringAsync(csv.current);
@@ -283,6 +384,7 @@ function Reportes({ R, onTap, onJs, onRefresh, onNav, onAdd, onAviso }) {
   return (
     <View style={[StyleSheet.absoluteFill, { backgroundColor: C.bg }]}>
       <ScrollView
+        ref={scroll}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         contentContainerStyle={{ paddingTop: ins.top + 10, paddingHorizontal: 16, paddingBottom: barAlto + 28 }}
@@ -291,10 +393,12 @@ function Reportes({ R, onTap, onJs, onRefresh, onNav, onAdd, onAviso }) {
         automaticallyAdjustKeyboardInsets
       >
         {R.tree.map((n, i) => (
-          <Nodo key={i} n={n} C={C} ctx={ctx} ancho={R.ancho || 358} />
+          <View key={i} onLayout={(e) => (posY.current[i] = e.nativeEvent.layout.y)}>
+            <Nodo n={n} C={C} ctx={ctx} ancho={R.ancho || 358} />
+          </View>
         ))}
       </ScrollView>
-      <BarraAbajo snap={R} C={C} activo="rep" onNav={onNav} onAdd={onAdd} />
+      <BarraAbajo snap={R} C={C} activo={R.kind === 'aho' ? 'home' : R.kind || 'rep'} onNav={onNav} onAdd={onAdd} />
     </View>
   );
 }

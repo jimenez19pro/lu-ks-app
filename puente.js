@@ -426,7 +426,7 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
     if (padreFlex && cs.display !== 'none' && n.tagName !== 'BR' && (n.textContent.trim() || n.querySelector('svg') || n.getBoundingClientRect().width)) return false;
     if (cs.display === 'none') return true;
     if (n.tagName === 'svg') return false;
-    if (n.tagName === 'INPUT' || n.tagName === 'TEXTAREA' || n.tagName === 'BUTTON') return false;
+    if (n.tagName === 'INPUT' || n.tagName === 'TEXTAREA' || n.tagName === 'BUTTON' || n.tagName === 'SELECT') return false;
     return !!INLINE[cs.display] && !(cs.display === 'inline-flex' && n.children.length > 1);
   }
   function caja(cs, el, padre) {
@@ -455,6 +455,20 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
     var mg = [px(cs.marginTop), px(cs.marginRight), px(cs.marginBottom), px(cs.marginLeft)];
     if (mg.some(Boolean)) o.m = mg;
     if (colorOk(cs.backgroundColor)) o.bg = cs.backgroundColor;
+    // Degradados (por ejemplo, los círculos de "Color de la app")
+    if (cs.backgroundImage && cs.backgroundImage.indexOf('linear-gradient') === 0) {
+      var ang = /(-?[\\d.]+)deg/.exec(cs.backgroundImage), stops = [], re = /(rgba?\\([^)]+\\))\\s*([\\d.]+%)?/g, mm2;
+      while ((mm2 = re.exec(cs.backgroundImage))) stops.push([mm2[1], mm2[2] ? parseFloat(mm2[2]) / 100 : null]);
+      if (stops.length >= 2) o.grad = { a: ang ? parseFloat(ang[1]) : 180, s: stops };
+    }
+    // Anillo de selección hecho con box-shadow (0 0 0 Npx color)
+    if (cs.boxShadow && cs.boxShadow !== 'none') {
+      var rings = cs.boxShadow.split(/,(?![^(]*\\))/).map(function (x) { return x.trim(); }).filter(function (x) { return /\\b0px 0px 0px [\\d.]+px/.test(x); });
+      if (rings.length) {
+        var lr = rings[rings.length - 1], col = /(rgba?\\([^)]+\\)|#[0-9a-f]{3,8})/i.exec(lr), wd = /0px 0px 0px ([\\d.]+)px/.exec(lr);
+        if (col && wd) o.ring = [parseFloat(wd[1]), col[1]];
+      }
+    }
     var br = px(cs.borderTopLeftRadius);
     if (br) o.br = Math.min(br, 999);
     ['Top', 'Right', 'Bottom', 'Left'].forEach(function (sd) {
@@ -481,9 +495,10 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
       if (!(interior && mio >= interior - 2) || /flex/.test(pcs.display)) o.as = o.as || 'flex-start';
     }
     if (el.style.height || el.style.maxHeight) o.h = px(cs.height);
-    // Círculos y botones redondos (íconos, ‹ ›): conservar su tamaño
+    // Círculos, cuadritos de íconos y botones redondos (‹ ›): conservar su tamaño
     var rr = el.getBoundingClientRect();
-    if (!o.w && rr.width && Math.abs(rr.width - rr.height) < 1.5 && br >= rr.width / 2 - 1 && rr.width <= 64) { o.w = Math.round(rr.width); o.h = Math.round(rr.height); o.fs0 = 1; }
+    var cuadrado = rr.width && Math.abs(rr.width - rr.height) < 1.5 && rr.width <= 64;
+    if (!o.w && cuadrado && (br >= rr.width / 2 - 1 || (!(el.textContent || '').trim() || (el.textContent || '').trim().length <= 2) && (o.bg || o.grad))) { o.w = Math.round(rr.width); o.h = Math.round(rr.height); o.fs0 = 1; }
     if (cs.position === 'absolute') {
       o.abs = 1;
       o.l = el.style.left && /%$/.test(el.style.left) ? el.style.left : px(cs.left);
@@ -499,8 +514,17 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
       if (pr && Math.abs((r0.left - pr.left) - (pr.right - r0.right)) < 3 && r0.width < pr.width - 20) sv.c = 1;
       return sv;
     }
+    if (el.tagName === 'SELECT') {
+      return { k: 'sel', sel: rutaDe(el), v: el.value, opts: [].map.call(el.options, function (o) { return { v: o.value, t: (o.textContent || '').trim() }; }),
+        st: textoEstilo(cs), b: caja(cs, el, padre) };
+    }
+    if (el.tagName === 'INPUT' && (el.type === 'checkbox' || el.type === 'radio')) {
+      return { k: 'chk', sel: rutaDe(el), on: !!el.checked, radio: el.type === 'radio', b: caja(cs, el, padre) };
+    }
+    if (el.tagName === 'INPUT' && (el.type === 'hidden' || el.type === 'file')) return null;
     if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
       return { k: 'in', sel: rutaDe(el), id: el.id || null, v: el.value || '', ph: el.getAttribute('placeholder') || '', multi: el.tagName === 'TEXTAREA', ro: !!el.readOnly,
+        tipo: el.type || 'text', im: el.getAttribute('inputmode') || '',
         st: textoEstilo(cs), b: caja(cs, el, padre) };
     }
     var o = { k: 'v', b: caja(cs, el, padre) };
@@ -536,9 +560,9 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
     o.ch = ch;
     return o;
   }
-  function snapRep() {
+  function snapEsp() {
     var app = q('#app');
-    if (!app || !q('h1', app)) return null;
+    if (!app || !app.children.length) return null;
     var ch = [];
     [].forEach.call(app.children, function (el) { var c = espejo(el, app); if (c) ch.push(c); });
     var acs = getComputedStyle(app), ancho = Math.round(app.getBoundingClientRect().width - px(acs.paddingLeft) - px(acs.paddingRight));
@@ -552,6 +576,13 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
     e.value = v;
     try { e.dispatchEvent(new Event('input', { bubbles: true })); } catch (x) {}
   };
+  window.__lkSel = function (sel, v) {
+    var e = q(sel);
+    if (!e) return;
+    e.value = v;
+    try { e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); } catch (x) {}
+    sched();
+  };
   window.__lkEnter = function (sel) {
     var e = q(sel);
     if (!e) return;
@@ -564,8 +595,11 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
     var home = tb === 'home' && hv === 'fin' && !!q('#app .hd');
     var txv = tb === 'tx' && !!q('#app #q-in');
     var repv = tb === 'rep' && !!q('#app h1');
-    var kind = home ? 'home' : txv ? 'tx' : repv ? 'rep' : null;
-    var S = home ? snap() : null, X = txv ? snapTx() : null, R = repv ? snapRep() : null;
+    var ahov = tb === 'home' && hv === 'aho' && !!q('#app .hd');
+    var conv = tb === 'con' && !!q('#app').children.length;
+    var kind = home ? 'home' : txv ? 'tx' : repv ? 'rep' : ahov ? 'aho' : conv ? 'con' : null;
+    var S = home ? snap() : null, X = txv ? snapTx() : null, R = (repv || ahov || conv) ? snapEsp() : null;
+    if (R) R.kind = kind;
     return { t: 'state', show: !!(kind && (S || X || R) && !covered()), kind: kind, out: out, tab: tb, snap: S, tx: X, rep: R };
   }
   // En Inicio y Movimientos la app dibuja los números: que la web no los "cuente".
@@ -578,7 +612,7 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
   function sinConteo() {
     if (typeof window.lkCount !== 'function' || window.lkCount.__lk) return;
     var o = window.lkCount;
-    window.lkCount = function () { try { if (tab === 'home' || tab === 'tx' || tab === 'rep') return; } catch (e) {} return o.apply(this, arguments); };
+    window.lkCount = function () { try { if (tab === 'home' || tab === 'tx' || tab === 'rep' || tab === 'con') return; } catch (e) {} return o.apply(this, arguments); };
     window.lkCount.__lk = 1;
   }
   var last = '', timer = null, late = null;
@@ -587,6 +621,8 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
     var s;
     try { sinConteo(); } catch (e) {}
     try { conFila(); } catch (e) {}
+    try { conDetalle(); } catch (e) {}
+    try { conMenu(); } catch (e) {}
     try { s = state(); } catch (e) { post({ t: 'err', where: 'state', msg: String(e && e.message || e) }); return; }
     var k = JSON.stringify(s);
     if (k !== last) { last = k; post(s); }
@@ -800,6 +836,119 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
     e.preventDefault(); e.stopImmediatePropagation();
     try { if (CUR) window.__lkEditData(CUR.id); } catch (x) {}
   }, true);
+  /* ---------- 9) Detalle del movimiento nativo ---------- */
+  function signo(t, cuenta) {
+    if (t.tipo === 'tr') return cuenta ? (t.dst === cuenta ? '+' : '−') : '⇄ ';
+    return t.tipo === 'in' ? '+' : '−';
+  }
+  function tono(t, cuenta) {
+    if (t.tipo === 'tr' && !cuenta) return 'mut';
+    var s = signo(t, cuenta);
+    return s === '+' ? 'pos' : '';
+  }
+  function catIco(t) { return icoH(ci(t.tipo === 'tr' ? 'tr' : t.tipo === 'in' ? (CATS[t.cat] ? t.cat : 'ing') : t.cat, 44)); }
+  function detData(t) {
+    var c = t.tipo === 'tr' ? null : (CATS[t.cat] || CATS.otro);
+    var raw0 = String((t.raw && t.raw[0]) || '');
+    var a = accDisp(t.acc && t.acc !== 'Sin cuenta' ? t.acc : '');
+    var dd = t.tipo === 'tr' ? accDisp(t.dst || '') : null;
+    return {
+      id: String(t.id), tp: t.tipo || 'out', a: t.amt, amt: signo(t) + m(t.amt), tone: tono(t), mer: t.mer || '',
+      fecha: TRf(dlabel(t.date)) + (t.date.slice(0, 4) !== String(new Date().getFullYear()) ? ' ' + t.date.slice(0, 4) : ''), hora: /\\d\\d:\\d\\d/.test(raw0.slice(11, 16)) ? raw0.slice(11, 16) : '',
+      date: t.date, cat: t.cat, catN: c ? TRf(c[0]) : TRf('Transferencia'), sub: t.sub || '', ico: catIco(t),
+      acc: t.acc || '', accN: TRf(a.n), accS: TRf(a.s), accTile: tileH(a.i),
+      dst: t.dst || '', dstN: dd ? TRf(dd.n) : '', dstTile: dd ? tileH(dd.i) : null,
+      cats: t.tipo === 'out' ? Object.keys(CATS).filter(function (k) { return k !== 'ing'; }).map(function (k) { return { k: k, n: TRf(CATS[k][0]), ico: icoH(ci(k, 32)) }; }) : [],
+      lang: window.LKLANG || 'es', th: theme()
+    };
+  }
+  function conDetalle() {
+    if (!FORM_NATIVO || typeof window.openCat !== 'function' || window.openCat.__lk) return;
+    var o = window.openCat;
+    window.openCat = function (id) {
+      var t = txPor(id);
+      if (!t || t.pend) return o.apply(this, arguments);
+      try { CUR = t; DELQ = false; } catch (e) {}
+      post({ t: 'det', d: detData(t) });
+    };
+    window.openCat.__lk = 1;
+  }
+  window.__lkDet = function (id) { if (window.openCat) openCat(id); };
+  // Cambiar la categoría desde el detalle (igual que tocar un chip en la web)
+  window.__lkCat = function (id, k) {
+    var t = txPor(id);
+    if (!t) return;
+    try { CUR = t; } catch (e) {}
+    var b = document.createElement('button');
+    b.dataset.cat = k; b.dataset.mer = t.mer; b.style.display = 'none';
+    document.body.appendChild(b); b.click(); b.remove();
+    var n = txPor(id);
+    if (n) post({ t: 'det', d: detData(n), upd: 1 });
+    sched();
+  };
+  // Repetir con fecha de hoy → formulario nativo lleno (como nuevo)
+  window.__lkDup = function (id) {
+    var t = txPor(id);
+    if (!t) return;
+    window.__lkFormData();
+    post({ t: 'edit', d: { nuevo: 1, tp: t.tipo || 'out', a: t.amt, mer: t.mer || '', cat: (t.cat in CATS) && t.cat !== 'ing' ? t.cat : '',
+      sub: t.sub || '', acc: t.acc && t.acc !== 'Sin cuenta' ? t.acc : '', dst: t.dst || '', date: iso(0) } });
+  };
+
+  /* ---------- 10) Ficha de cuenta nativa ---------- */
+  window.__lkCuenta = function (i) {
+    try {
+      var a = ACC[+i];
+      if (!a) return;
+      var n = a.n, b = bal(n), mesK = mesHoy(), entra = 0, sale = 0;
+      var lst = tx.filter(function (t) { return t.acc === n || (t.tipo === 'tr' && t.dst === n); }).sort(function (x, y) { return y.date < x.date ? -1 : y.date > x.date ? 1 : y.id - x.id; });
+      lst.forEach(function (t) {
+        if (t.date.slice(0, 7) !== mesK) return;
+        if ((t.tipo === 'in' && t.acc === n) || (t.tipo === 'tr' && t.dst === n)) entra += t.amt; else if (t.acc === n) sale += t.amt;
+      });
+      var o = { t: 'cuenta', i: +i, n: n, tile: tileH(accIco(a, 56)), tipo: a.tipo, red: a.red || '', lang: window.LKLANG || 'es', th: theme(), hide: !!window.HIDE,
+        mes: TRf(new Date().toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })), entra: mm(entra), sale: mm(sale), total: lst.length,
+        movs: lst.slice(0, 60).map(function (t) {
+          var c = t.tipo === 'tr' ? null : (CATS[t.cat] || CATS.otro);
+          return { id: String(t.id), t: t.mer, s: TRf(dlabel(t.date)) + ' · ' + (t.tipo === 'tr' ? (t.dst === n ? TRf('Desde') + ' ' + t.acc : TRf('Hacia') + ' ' + (t.dst || '')) : TRf(c[0])),
+            a: signo(t, n) + m(t.amt), tone: tono(t, n), ico: catIco(t), p: !!t.pend };
+        }) };
+      if (a.tipo === 'credito') {
+        var usado = a.ini - b, cupo = +a.cupo || 0;
+        o.usado = mm(Math.max(usado, 0)); o.cupo = mm(cupo); o.disp = mm(Math.max(cupo - usado, 0)); o.pct = cupo ? Math.max(0, Math.min(100, usado / cupo * 100)) : 0;
+        o.pago = a.pago ? +a.pago : 0; o.color = a.color || '';
+      } else {
+        var sal = a.ini + b;
+        o.saldo = (sal < 0 && !window.HIDE ? '−' : '') + mm(Math.abs(sal)); o.neg = sal < 0;
+      }
+      post(o);
+    } catch (e) { post({ t: 'err', where: 'cuenta', msg: String(e && e.message || e) }); }
+  };
+  window.__lkEditAcc = function (i) { try { openAcc(+i); } catch (e) {} sched(); };
+  window.__lkVerCuenta = function (n) {
+    try { FL = { tipo: '', cat: '', acc: n }; Q = ''; tab = 'tx'; SUB = ''; render(); window.scrollTo(0, 0); } catch (e) {}
+    sched();
+  };
+
+  /* ---------- 11) Menú de navegación nativo ---------- */
+  function conMenu() {
+    if (!FORM_NATIVO || typeof window.navOpen !== 'function' || window.navOpen.__lk) return;
+    var o = window.navOpen;
+    window.navOpen = function () {
+      try {
+        var secs = NAVS.map(function (s) {
+          return { t: TRf(s[0]), items: s[1].filter(function (k) { return NAVI[k]; }).map(function (k) {
+            var it = NAVI[k];
+            return { k: k, t: TRf(it[0]), svg: svg(it[1], 22), h: (it[2] && it[2].h) || '' };
+          }) };
+        });
+        post({ t: 'menu', secs: secs, lang: window.LKLANG || 'es', th: theme() });
+      } catch (e) { return o.apply(this, arguments); }
+    };
+    window.navOpen.__lk = 1;
+  }
+  window.__lkNav = function (k) { try { navGo(k); } catch (e) {} sched(); };
+
   // Abrir IA o Foto (escanear recibo) de la web desde el formulario nativo
   window.__lkFormWeb = function (k) {
     try {
@@ -810,6 +959,34 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
       b.style.display = 'none';
       document.body.appendChild(b); b.click(); b.remove();
     } catch (e) {}
+    sched();
+  };
+  // Elegir fotos y archivos con el selector del iPhone (la web no puede abrirlo desde la app)
+  var PICKS = {}, pickN = 0;
+  var oInClick = HTMLInputElement.prototype.click;
+  HTMLInputElement.prototype.click = function () {
+    if (this.type === 'file' && FORM_NATIVO) {
+      var id = 'p' + (++pickN);
+      PICKS[id] = this;
+      post({ t: 'pick', id: id, accept: this.getAttribute('accept') || '', multi: !!this.multiple, cam: this.getAttribute('capture') || '' });
+      return;
+    }
+    return oInClick.apply(this, arguments);
+  };
+  window.__lkPicked = function (id, files) {
+    var inp = PICKS[id];
+    delete PICKS[id];
+    if (!inp || !files || !files.length) return;
+    try {
+      var dt = new DataTransfer();
+      files.forEach(function (f) {
+        var bin = atob(f.b64), u = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+        dt.items.add(new File([u], f.name || 'archivo', { type: f.type || '' }));
+      });
+      inp.files = dt.files;
+      inp.dispatchEvent(new Event('change', { bubbles: true }));
+    } catch (e) { post({ t: 'err', where: 'pick', msg: String(e && e.message || e) }); }
     sched();
   };
   // El botón + de la web abre el formulario nativo

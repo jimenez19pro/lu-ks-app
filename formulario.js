@@ -58,7 +58,9 @@ const T = {
   entre: ['Entre cuentas', 'Between accounts'],
 };
 
-export default function Formulario({ visible, datos, editar, onClose, onSave, onWeb, onDelete }) {
+export default function Formulario({ visible, datos, editar: datosIni, onClose, onSave, onWeb, onDelete }) {
+  const editar = datosIni && !datosIni.nuevo ? datosIni : null;
+  const lleno = datosIni || null;
   const ins = useSafeAreaInsets();
   const D = datos || {};
   const en = D.lang === 'en';
@@ -93,19 +95,19 @@ export default function Formulario({ visible, datos, editar, onClose, onSave, on
     setError('');
     setDia(D.hoy || ymd(new Date()));
     iniciado.current = false;
-    if (editar) {
-      // Editar: llenar con los datos del movimiento
+    if (lleno) {
+      // Editar (o repetir): llenar con los datos del movimiento
       iniciado.current = true;
-      setTp(editar.tp === 'in' || editar.tp === 'tr' ? editar.tp : 'out');
-      setMonto(String(editar.a || ''));
-      setDesc(editar.mer || '');
-      setCat(editar.cat || '');
-      setSub(editar.sub || '');
-      setAcc(editar.acc || '');
-      setDst(editar.dst || '');
-      setDia(editar.date || D.hoy || ymd(new Date()));
+      setTp(lleno.tp === 'in' || lleno.tp === 'tr' ? lleno.tp : 'out');
+      setMonto(String(lleno.a || ''));
+      setDesc(lleno.mer || '');
+      setCat(lleno.cat || '');
+      setSub(lleno.sub || '');
+      setAcc(lleno.acc || '');
+      setDst(lleno.dst || '');
+      setDia(lleno.date || D.hoy || ymd(new Date()));
     }
-  }, [visible, editar]);
+  }, [visible, lleno]);
   // Cuenta principal por defecto cuando llegan los datos.
   useEffect(() => {
     if (visible && D.accs && !iniciado.current) {
@@ -366,7 +368,7 @@ export default function Formulario({ visible, datos, editar, onClose, onSave, on
               placeholder="$ 0"
               placeholderTextColor={C.mut}
               keyboardType="number-pad"
-              autoFocus={!editar}
+              autoFocus={!lleno}
               maxLength={21}
               textAlign="center"
               adjustsFontSizeToFit

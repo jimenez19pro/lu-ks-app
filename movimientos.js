@@ -324,9 +324,9 @@ function Movimientos({ S, onTap, onKeep, onJs, onRefresh, onNav, onAdd, onEdit }
   const abrir = useCallback(
     (id) => {
       Keyboard.dismiss();
-      onTap(`#txlist .row[data-id="${String(id).replace(/"/g, '\\"')}"]`);
+      onJs(`window.__lkDet&&window.__lkDet(${JSON.stringify(String(id))})`);
     },
-    [onTap]
+    [onJs]
   );
 
   // Lista: separadores de día + filas (con esquinas redondeadas por grupo).

@@ -201,7 +201,7 @@ export function Fila({ C, f, ico, t, s, right, onPress, last, pend }) {
 }
 
 /* ---------- Pantalla ---------- */
-function Inicio({ snap, onTap, onKeep, onRefresh, onNav, onAdd, viejo }) {
+function Inicio({ snap, onTap, onKeep, onRefresh, onNav, onAdd, onCuenta, viejo }) {
   const ins = useSafeAreaInsets();
   const C = tema(snap && snap.th);
   const f = useCallback((n) => Math.round(n * C.z * 10) / 10, [C.z]);
@@ -245,7 +245,7 @@ function Inicio({ snap, onTap, onKeep, onRefresh, onNav, onAdd, viejo }) {
                 </Text>
               </Toque>
             </View>
-            <Toque onPress={() => tap('#navopen')} label="Menú">
+            <Toque onPress={() => keep('#navopen')} label="Menú">
               <View style={[st.circ, { backgroundColor: C.sf }]}>
                 <Ico xml={hd.grid || GRID} size={22} color={C.ink} />
               </View>
@@ -265,7 +265,7 @@ function Inicio({ snap, onTap, onKeep, onRefresh, onNav, onAdd, viejo }) {
         {snap.seg && snap.seg.length ? (
           <View style={[st.seg, { backgroundColor: C.sf2 }]}>
             {snap.seg.map((b) => (
-              <Toque key={b.k} onPress={() => (b.on ? null : tap(`#app [data-hv="${b.k}"]`))} style={[st.segB, b.on && { backgroundColor: C.dark ? '#636366' : C.sf, ...st.sombra }]}>
+              <Toque key={b.k} onPress={() => (b.on ? null : keep(`#app [data-hv="${b.k}"]`))} style={[st.segB, b.on && { backgroundColor: C.dark ? '#636366' : C.sf, ...st.sombra }]}>
                 <Text style={{ color: b.on ? C.ink : C.mut, fontSize: f(14), fontWeight: '600' }}>{b.t}</Text>
               </Toque>
             ))}
@@ -362,7 +362,7 @@ function Inicio({ snap, onTap, onKeep, onRefresh, onNav, onAdd, viejo }) {
                     const tinta = cr ? '#FFFFFF' : C.ink;
                     const suave = cr ? 'rgba(255,255,255,0.85)' : C.mut;
                     return (
-                      <Toque key={a.i} onPress={() => tap(a.sel)} label={a.name} style={{ alignSelf: 'stretch' }}>
+                      <Toque key={a.i} onPress={() => (onCuenta ? onCuenta(a.i) : tap(a.sel))} label={a.name} style={{ alignSelf: 'stretch' }}>
                         <View style={[st.acct, { flex: 1 }, { backgroundColor: fondo }, !cr && { borderLeftWidth: 5, borderLeftColor: c }]}>
                           <View style={[st.row, { justifyContent: 'space-between' }]}>
                             <Tile tile={a.tile} z={30} C={C} />
@@ -563,7 +563,7 @@ function Inicio({ snap, onTap, onKeep, onRefresh, onNav, onAdd, viejo }) {
                     s={r.s}
                     pend={r.pend}
                     last={i === last.rows.length - 1}
-                    onPress={() => tap(r.sel)}
+                    onPress={() => keep(r.sel)}
                     right={
                       <Text style={{ color: css(r.ac, C.ink), fontSize: f(15), fontWeight: '600', fontVariant: ['tabular-nums'] }} numberOfLines={1}>
                         {r.amt}

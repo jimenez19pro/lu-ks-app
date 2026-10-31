@@ -27,6 +27,13 @@ dentro de una app.
 - **Deslizar en Movimientos**: deslizar una fila a la izquierda muestra Editar y Eliminar (con confirmación), como en Correo del iPhone.
 - **Reportes nativo** (`reportes.js`): la web manda un "espejo" de la pestaña Reportes (cajas, textos, barras, gráficas SVG, botones y campos) y se dibuja con piezas del celular. Todas las secciones, el chat financiero y Descargar (Copiar usa el portapapeles del celular).
 
+## Etapa 2d (30 oct 2026, noche)
+- **Ahorros y deudas nativo** y **Ajustes nativo**: usan el mismo "espejo" de Reportes (ahora entiende listas desplegables, casillas, teclados numéricos, degradados y anillos de selección).
+- **Detalle del movimiento nativo** (`hojas.js`): hoja de iPhone con monto, fecha y hora, categoría, cuenta, cambiar categoría, Repetir con fecha de hoy, Editar y Eliminar.
+- **Ficha de cada cuenta** (`hojas.js`): saldo (o usado/cupo/disponible en tarjetas), entró y salió del mes, movimientos, Ver en Movimientos y Editar cuenta.
+- **Menú de navegación nativo** (`hojas.js`): el botón de cuadritos abre "Ir a…" con buscador; lleva a la sección exacta.
+- **Fotos y archivos** (`selector.js`): cuando la web pide una foto o un archivo (recibos, garantías, importar respaldo), se abre el selector del iPhone (cámara o Fotos).
+
 ## Archivos
 | Archivo | Qué es |
 |---|---|
@@ -34,7 +41,9 @@ dentro de una app.
 | `inicio.js` | Inicio nativo (y la barra de abajo compartida) |
 | `movimientos.js` | Movimientos nativo |
 | `formulario.js` | Formulario de anotar y editar nativo |
-| `reportes.js` | Reportes nativo |
+| `reportes.js` | Pantallas "espejo": Reportes, Ahorros y deudas, Ajustes |
+| `hojas.js` | Hojas nativas: detalle del movimiento, ficha de cuenta, menú |
+| `selector.js` | Selector de fotos y archivos del iPhone para la web |
 | `puente.js` | Código que corre dentro de la web y le manda datos a la app |
 | `copia.js` | Copia guardada de la página (abrir rápido / sin internet) |
 | `recordatorios.js` | Recordatorios en el celular |
