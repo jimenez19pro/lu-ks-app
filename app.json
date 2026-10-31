@@ -15,9 +15,8 @@
         "usesNonExemptEncryption": false
       },
       "infoPlist": {
-        "NSCameraUsageDescription": "Lu-Ks usa la cámara para tomar fotos de recibos y garantías.",
-        "NSPhotoLibraryUsageDescription": "Lu-Ks usa tus fotos para leer recibos y guardar garantías.",
-        "NSMicrophoneUsageDescription": "Lu-Ks no graba audio; iOS pide este permiso para algunas funciones de la cámara."
+        "NSCameraUsageDescription": "Lu-Ks usa la cámara solo cuando tú lo eliges, para tomar fotos de recibos y de garantías.",
+        "NSPhotoLibraryUsageDescription": "Lu-Ks usa tus fotos solo cuando tú eliges una, para leer recibos y guardar garantías."
       }
     },
     "android": {
@@ -29,6 +28,9 @@
       },
       "permissions": [
         "CAMERA"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "plugins": [
@@ -52,7 +54,15 @@
           "color": "#007AFF"
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Lu-Ks usa tus fotos solo cuando tú eliges una, para leer recibos y guardar garantías.",
+          "cameraPermission": "Lu-Ks usa la cámara solo cuando tú lo eliges, para tomar fotos de recibos y de garantías.",
+          "microphonePermission": false
+        }
+      ]
     ],
     "owner": "lu-ks-app",
     "runtimeVersion": {
@@ -66,6 +76,7 @@
       "eas": {
         "projectId": "6974df26-5e12-43c2-b9ed-94661531dc85"
       }
-    }
+    },
+    "description": "Lu-Ks: tus finanzas personales, claras."
   }
 }

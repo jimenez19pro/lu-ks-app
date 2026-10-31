@@ -95,7 +95,10 @@ export default function Formulario({ visible, datos, editar: datosIni, onClose, 
     setError('');
     setDia(D.hoy || ymd(new Date()));
     iniciado.current = false;
-    if (lleno) {
+    if (lleno && lleno.soloTipo) {
+      // Botón rápido "Transferir": solo elige el tipo; la cuenta principal se pone sola
+      setTp(lleno.tp === 'in' || lleno.tp === 'tr' ? lleno.tp : 'out');
+    } else if (lleno) {
       // Editar (o repetir): llenar con los datos del movimiento
       iniciado.current = true;
       setTp(lleno.tp === 'in' || lleno.tp === 'tr' ? lleno.tp : 'out');
@@ -314,7 +317,7 @@ export default function Formulario({ visible, datos, editar: datosIni, onClose, 
           <Text style={{ color: C.ac, fontSize: 17 }}>{t('cancelar')}</Text>
         </Toque>
         <Text style={{ flex: 1, textAlign: 'center', color: C.ink, fontSize: 17, fontWeight: '600' }} numberOfLines={1}>
-          {editar ? t('editar') : t('nuevo')}
+          {editar ? t('editar') : (lleno && lleno.tit) || t('nuevo')}
         </Text>
         <View style={[st.row, { gap: 6, minWidth: 80, justifyContent: 'flex-end' }]}>
           {editar ? null : D.foto ? (

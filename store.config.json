@@ -1,0 +1,82 @@
+{
+  "configVersion": 0,
+  "apple": {
+    "copyright": "2026 Lu-Ks",
+    "categories": [
+      "FINANCE",
+      "PRODUCTIVITY"
+    ],
+    "info": {
+      "es-MX": {
+        "title": "Lu-Ks: Finanzas personales",
+        "subtitle": "Gastos, presupuestos y ahorro",
+        "description": "Lu-Ks te ayuda a saber en qué se va tu dinero y cuánto te queda, sin complicaciones.\n\nANOTA EN SEGUNDOS\n• Gastos, ingresos y transferencias entre tus cuentas.\n• Categorías y subcategorías automáticas según la descripción.\n• Escribe una nota como \"almuerzo 25 mil en efectivo\" y Lu-Ks la convierte en un movimiento (asistente opcional).\n\nTUS CUENTAS Y TARJETAS\n• Débito, efectivo y tarjetas de crédito con cupo, día de corte y día de pago.\n• Saldo de cada cuenta al día.\n\nPRESUPUESTOS, METAS Y DEUDAS\n• Presupuesto por categoría y cuánto puedes gastar hoy.\n• Metas de ahorro con fecha, fondo de emergencia y regla 50/30/20.\n• Plan para salir de deudas, compras a cuotas y pagos recurrentes.\n\nREPORTES QUE SE ENTIENDEN\n• Tendencia de los últimos meses, gastos hormiga, patrimonio neto y \"Tu año\".\n• Busca cualquier movimiento por nombre, monto o fecha.\n\nRECORDATORIOS\n• Avisos en tu celular antes de pagos fijos, de la tarjeta y de cuotas.\n• Garantías y facturas con foto y aviso antes de que venzan.\n\nPRIVADA Y SIMPLE\n• Tus datos son solo tuyos: no vendemos ni compartimos tu información.\n• Modo claro y oscuro, 6 colores y español o inglés.\n• Exporta tus datos o elimina tu cuenta cuando quieras.\n\nLu-Ks no es un banco ni mueve tu dinero: solo lleva el control de tus finanzas.",
+        "keywords": [
+          "gastos",
+          "presupuesto",
+          "ahorro",
+          "deudas",
+          "finanzas",
+          "dinero",
+          "cuentas",
+          "tarjeta",
+          "metas",
+          "control",
+          "quincena"
+        ],
+        "releaseNotes": "Primera versión de Lu-Ks en el App Store.",
+        "privacyPolicyUrl": "https://jimenez19pro.github.io/lu-ks/privacidad.html",
+        "supportUrl": "https://jimenez19pro.github.io/lu-ks/",
+        "marketingUrl": "https://jimenez19pro.github.io/lu-ks/"
+      },
+      "en-US": {
+        "title": "Lu-Ks: Personal Finance",
+        "subtitle": "Expenses, budgets and savings",
+        "description": "Lu-Ks helps you see where your money goes and how much you have left, without the hassle.\n\nLOG IN SECONDS\n• Expenses, income and transfers between your accounts.\n• Automatic categories and subcategories from the description.\n• Type a note like \"lunch 25k cash\" and Lu-Ks turns it into a transaction (optional assistant).\n\nYOUR ACCOUNTS AND CARDS\n• Debit, cash and credit cards with limit, statement and due dates.\n• Up-to-date balance for every account.\n\nBUDGETS, GOALS AND DEBTS\n• Budgets by category and how much you can spend today.\n• Savings goals with dates, emergency fund and the 50/30/20 rule.\n• A plan to get out of debt, installment purchases and recurring payments.\n\nREPORTS THAT MAKE SENSE\n• Monthly trends, small daily expenses, net worth and \"Your year\".\n• Find any transaction by name, amount or date.\n\nREMINDERS\n• Phone reminders before bills, card payments and installments.\n• Warranties and receipts with photos and an alert before they expire.\n\nPRIVATE AND SIMPLE\n• Your data is yours: we don't sell or share your information.\n• Light and dark mode, 6 colors, Spanish or English.\n• Export your data or delete your account at any time.\n\nLu-Ks is not a bank and doesn't move your money: it just keeps track of your finances.",
+        "keywords": [
+          "expenses",
+          "budget",
+          "savings",
+          "debt",
+          "finance",
+          "money",
+          "accounts",
+          "card",
+          "goals",
+          "tracker"
+        ],
+        "releaseNotes": "First release of Lu-Ks on the App Store.",
+        "privacyPolicyUrl": "https://jimenez19pro.github.io/lu-ks/privacidad.html",
+        "supportUrl": "https://jimenez19pro.github.io/lu-ks/",
+        "marketingUrl": "https://jimenez19pro.github.io/lu-ks/"
+      }
+    },
+    "advisory": {
+      "alcoholTobaccoOrDrugUseOrReferences": "NONE",
+      "contests": "NONE",
+      "gamblingSimulated": "NONE",
+      "horrorOrFearThemes": "NONE",
+      "matureOrSuggestiveThemes": "NONE",
+      "medicalOrTreatmentInformation": "NONE",
+      "profanityOrCrudeHumor": "NONE",
+      "sexualContentGraphicAndNudity": "NONE",
+      "sexualContentOrNudity": "NONE",
+      "violenceCartoonOrFantasy": "NONE",
+      "violenceRealistic": "NONE",
+      "violenceRealisticProlongedGraphicOrSadistic": "NONE",
+      "gambling": false,
+      "unrestrictedWebAccess": false,
+      "kidsAgeBand": null
+    },
+    "review": {
+      "firstName": "",
+      "lastName": "",
+      "email": "",
+      "phone": "",
+      "demoUsername": "",
+      "demoPassword": "",
+      "demoRequired": true,
+      "notes": "Crea una cuenta con correo y contraseña en la primera pantalla, o usa la cuenta de prueba de arriba. La app no mueve dinero: solo registra movimientos que el usuario escribe."
+    }
+  }
+}

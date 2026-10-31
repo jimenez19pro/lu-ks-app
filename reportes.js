@@ -5,7 +5,8 @@
 // pantalla ya dibujada (cajas, textos, barras, gráficas en SVG, botones y
 // campos) y aquí se dibuja con piezas del celular. Cada toque se le pide a la web.
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Modal, Platform, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
 import { SvgXml } from 'react-native-svg';
@@ -154,7 +155,50 @@ function Pedazos({ n, C, tap, onTap }) {
   );
 }
 
-function Campo({ n, C, onIn, onEnter }) {
+// Campo de fecha de la web → calendario del iPhone
+function CampoFecha({ n, C, onIn, L }) {
+  const [abierto, setAbierto] = useState(false);
+  const v = n.v || '';
+  const fecha = v ? new Date(v + 'T12:00:00') : new Date();
+  const txt = v ? v.slice(8, 10) + '/' + v.slice(5, 7) + '/' + v.slice(0, 4) : L === 'en' ? 'Choose date' : 'Elegir fecha';
+  const ymd = (d) => d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+  return (
+    <>
+      <Toque onPress={() => setAbierto(true)} style={[estiloCaja(n.b), { flexDirection: 'row', alignItems: 'center', backgroundColor: C.sf2, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 }]}>
+        <Text style={{ flex: 1, color: v ? C.ink : C.mut, fontSize: 16 }}>{txt}</Text>
+        {v ? (
+          <Toque onPress={() => onIn(n.sel, '', true)} hitSlop={10}>
+            <Text style={{ color: C.mut, fontSize: 15 }}>✕</Text>
+          </Toque>
+        ) : null}
+      </Toque>
+      <Modal visible={abierto} transparent animationType="fade" onRequestClose={() => setAbierto(false)}>
+        <Toque onPress={() => setAbierto(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: C.sf, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 12, paddingBottom: 34 }}>
+            <DateTimePicker
+              value={fecha}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'inline' : 'default'}
+              themeVariant={C.dark ? 'dark' : 'light'}
+              accentColor={C.ac}
+              locale={L === 'en' ? 'en-US' : 'es-CO'}
+              onChange={(e, d) => {
+                if (Platform.OS !== 'ios') setAbierto(false);
+                if (d && (!e || e.type !== 'dismissed')) onIn(n.sel, ymd(d), true);
+              }}
+            />
+            <Toque onPress={() => setAbierto(false)} style={{ alignItems: 'center', paddingVertical: 12 }}>
+              <Text style={{ color: C.ac, fontSize: 17, fontWeight: '600' }}>{L === 'en' ? 'Done' : 'Listo'}</Text>
+            </Toque>
+          </View>
+        </Toque>
+      </Modal>
+    </>
+  );
+}
+
+function Campo({ n, C, onIn, onEnter, L }) {
+  if (n.tipo === 'date') return <CampoFecha n={n} C={C} onIn={onIn} L={L} />;
   const [v, setV] = useState(n.v || '');
   const [foco, setFoco] = useState(false);
   useEffect(() => {
@@ -272,7 +316,14 @@ function Nodo({ n, C, ctx, ancho }) {
       </View>
     );
   }
-  if (n.k === 'in') return <Campo n={n} C={C} onIn={ctx.onIn} onEnter={ctx.onEnter} />;
+  if (n.k === 'in') return <Campo n={n} C={C} onIn={ctx.onIn} onEnter={ctx.onEnter} L={ctx.L} />;
+  if (n.k === 'img') {
+    const k = ancho && n.w > ancho ? ancho / n.w : 1;
+    const im = (
+      <Image source={{ uri: n.src }} style={[estiloCaja(n.b), { width: n.w * k, height: n.h * k, borderRadius: n.br || 0 }]} resizeMode={n.fit === 'contain' ? 'contain' : 'cover'} />
+    );
+    return n.tap ? <Toque onPress={() => ctx.onTap(n.tap)}>{im}</Toque> : im;
+  }
   if (n.k === 'sel') return <Selector n={n} C={C} onSel={ctx.onSel} />;
   if (n.k === 'chk') {
     return (
@@ -314,7 +365,12 @@ function Nodo({ n, C, ctx, ancho }) {
     );
   }
   // Fondo con degradado
-  const fondo = n.b && n.b.grad ? <Degradado g={n.b.grad} radio={est.borderRadius} /> : null;
+  const fondo =
+    n.b && n.b.grad ? (
+      <Degradado g={n.b.grad} radio={est.borderRadius} />
+    ) : n.b && n.b.bgimg ? (
+      <Image source={{ uri: n.b.bgimg }} style={[StyleSheet.absoluteFill, est.borderRadius ? { borderRadius: est.borderRadius } : null]} resizeMode="cover" />
+    ) : null;
   if (n.tap) {
     return (
       <Toque onPress={n.dis ? null : () => ctx.onTap(n.tap)} disabled={!!n.dis} style={[est, fondo ? { overflow: 'hidden' } : null, n.dis ? { opacity: 0.5 } : null]}>
@@ -336,7 +392,7 @@ function Reportes({ R, onTap, onJs, onRefresh, onNav, onAdd, onAviso, irA, onIrA
   const C = tema(R && R.th);
   const [cargando, setCargando] = useState(false);
   const csv = useRef('');
-  const onIn = useCallback((sel, v) => onJs(`window.__lkIn&&window.__lkIn(${JSON.stringify(sel)},${JSON.stringify(v)})`), [onJs]);
+  const onIn = useCallback((sel, v, cambio) => onJs(`window.__lkIn&&window.__lkIn(${JSON.stringify(sel)},${JSON.stringify(v)},${cambio ? 'true' : 'false'})`), [onJs]);
   const onEnter = useCallback((sel) => onJs(`window.__lkEnter&&window.__lkEnter(${JSON.stringify(sel)})`), [onJs]);
   const onSel = useCallback((sel, v) => onJs(`window.__lkSel&&window.__lkSel(${JSON.stringify(sel)},${JSON.stringify(v)})`), [onJs]);
   const scroll = useRef(null);
@@ -369,6 +425,7 @@ function Reportes({ R, onTap, onJs, onRefresh, onNav, onAdd, onAviso, irA, onIrA
     onIn,
     onEnter,
     onSel,
+    L: R && R.lang,
     copiar: async () => {
       if (!csv.current) return;
       await Clipboard.setStringAsync(csv.current);
@@ -404,3 +461,40 @@ function Reportes({ R, onTap, onJs, onRefresh, onNav, onAdd, onAviso, irA, onIrA
 }
 
 export default memo(Reportes);
+
+// Ventana de la web (cuenta, presupuesto, meta, deuda, pago recurrente, garantías,
+// Notas IA, herramientas…) dibujada como hoja de iPhone.
+export function HojaEspejo({ h, visible, onTap, onJs, onClose, aviso }) {
+  const ins = useSafeAreaInsets();
+  const C = tema(h && h.th);
+  const onIn = useCallback((sel, v, cambio) => onJs(`window.__lkIn&&window.__lkIn(${JSON.stringify(sel)},${JSON.stringify(v)},${cambio ? 'true' : 'false'})`), [onJs]);
+  const onEnter = useCallback((sel) => onJs(`window.__lkEnter&&window.__lkEnter(${JSON.stringify(sel)})`), [onJs]);
+  const onSel = useCallback((sel, v) => onJs(`window.__lkSel&&window.__lkSel(${JSON.stringify(sel)},${JSON.stringify(v)})`), [onJs]);
+  const ultimo = useRef(h);
+  if (h) ultimo.current = h;
+  const H = h || ultimo.current;
+  const ctx = { onTap, onIn, onEnter, onSel, L: H && H.lang, copiar: () => {} };
+  return (
+    <Modal visible={!!visible && !!h} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={{ flex: 1, backgroundColor: C.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={{ alignItems: 'center', paddingTop: 8 }}>
+          <View style={{ width: 40, height: 5, borderRadius: 3, backgroundColor: C.ln }} />
+        </View>
+        {H ? (
+          <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={{ padding: 20, paddingTop: 14, paddingBottom: ins.bottom + 30 }}>
+            {H.tree.map((n, i) => (
+              <Nodo key={i} n={n} C={C} ctx={ctx} ancho={H.ancho || 350} />
+            ))}
+          </ScrollView>
+        ) : null}
+        {aviso ? (
+          <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, bottom: 60, alignItems: 'center', paddingHorizontal: 24 }}>
+            <View style={{ paddingVertical: 12, paddingHorizontal: 18, borderRadius: 18, backgroundColor: 'rgba(28,28,30,0.92)' }}>
+              <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '500', textAlign: 'center' }}>{aviso}</Text>
+            </View>
+          </View>
+        ) : null}
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}

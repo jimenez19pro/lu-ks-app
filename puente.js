@@ -13,6 +13,13 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
   var Lx = function (es, en) { try { return window.L ? L(es, en) : (window.LKLANG === 'en' ? en : es); } catch (e) { return es; } };
 
   /* ---------- 1) Google no funciona dentro de la app ---------- */
+  // Se esconde el botón (y la rayita "o" de encima): Apple rechaza botones de inicio de sesión que no funcionan.
+  (function () {
+    var st = document.createElement('style');
+    st.textContent = '[data-au="google"]{display:none!important}div:has(+ [data-au="google"]){display:none!important}';
+    var pon = function () { (document.head || document.documentElement).appendChild(st); };
+    if (document.documentElement) pon(); else document.addEventListener('DOMContentLoaded', pon);
+  })();
   document.addEventListener('click', function (e) {
     var b = e.target && e.target.closest && e.target.closest('[data-au="google"]');
     if (!b) return;
@@ -129,12 +136,13 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
       z: isFinite(z) && z > 0 ? z : 1, dark: dark };
   }
   // ¿Hay algo encima del Inicio (una ventana, el menú, la historia, el inicio de sesión…)?
-  function covered() {
+  function covered(hoja) {
     var w = innerWidth, h = innerHeight, pts = [[w / 2, 150], [w / 2, h * 0.62], [w * 0.2, h * 0.4]];
     for (var i = 0; i < pts.length; i++) {
       var el = document.elementFromPoint(pts[i][0], pts[i][1]);
       if (!el || el === document.body || el === document.documentElement) continue;
       if (el.closest('#app, nav, #splash, #toast, .ptr')) continue;
+      if (hoja && (el === hoja || hoja.contains(el))) continue; // la ventana se dibuja nativa encima
       return true;
     }
     return false;
@@ -171,6 +179,17 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
       S.hero = { lb: T(q('.hero-t span', he)), v: T(hv), neg: !!(hv && hv.classList.contains('neg')),
         bar: bar(q('.hero-b', he)), sub: T(q('.hero-s', he)) };
     }
+    // Gastos del período por categoría (barra de colores del Inicio nativo)
+    try {
+      if (typeof mtx === 'function' && typeof sumBy === 'function' && window.CATS) {
+        var by = sumBy(mtx()), ks = Object.keys(by).filter(function (k) { return by[k] > 0; }).sort(function (x, y) { return by[y] - by[x]; });
+        var tot = ks.reduce(function (x, k) { return x + by[k]; }, 0);
+        S.gastos = { t: Lx('Gastos', 'Spending'), per: S.per ? S.per.label : '', total: mm(tot), n: tot, vacio: Lx('Aún no hay gastos en este período', 'No spending in this period yet'),
+          items: ks.map(function (k) { var c = CATS[k] || CATS.otro; return { k: k, n: TRf(c[0]), v: mm(by[k]), a: by[k], c: c[2] || '', ico: icoH(ci(k, 32)) }; }) };
+      }
+    } catch (e) {}
+    S.rapido = { add: Lx('Anotar', 'Add'), tr: Lx('Transferir', 'Transfer'), acc: Lx('Cuentas', 'Accounts'), mas: Lx('Más', 'More'),
+      dinero: Lx('Tu dinero', 'Your money') };
     // General
     S.gen = sectHdr('gen');
     if (S.gen && !S.gen.col) {
@@ -455,6 +474,9 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
     var mg = [px(cs.marginTop), px(cs.marginRight), px(cs.marginBottom), px(cs.marginLeft)];
     if (mg.some(Boolean)) o.m = mg;
     if (colorOk(cs.backgroundColor)) o.bg = cs.backgroundColor;
+    // Imagen de fondo (fotos de garantías)
+    var bi = /url\\(["']?([^"')]+)["']?\\)/.exec(cs.backgroundImage || '');
+    if (bi) o.bgimg = bi[1];
     // Degradados (por ejemplo, los círculos de "Color de la app")
     if (cs.backgroundImage && cs.backgroundImage.indexOf('linear-gradient') === 0) {
       var ang = /(-?[\\d.]+)deg/.exec(cs.backgroundImage), stops = [], re = /(rgba?\\([^)]+\\))\\s*([\\d.]+%)?/g, mm2;
@@ -498,7 +520,9 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
     // Círculos, cuadritos de íconos y botones redondos (‹ ›): conservar su tamaño
     var rr = el.getBoundingClientRect();
     var cuadrado = rr.width && Math.abs(rr.width - rr.height) < 1.5 && rr.width <= 64;
-    if (!o.w && cuadrado && (br >= rr.width / 2 - 1 || (!(el.textContent || '').trim() || (el.textContent || '').trim().length <= 2) && (o.bg || o.grad))) { o.w = Math.round(rr.width); o.h = Math.round(rr.height); o.fs0 = 1; }
+    // Interruptores y cajitas sin texto (por ejemplo, "Cuenta principal"): también conservan su tamaño
+    if (!o.w && !cuadrado && rr.width && rr.width <= 80 && rr.height <= 80 && !(el.textContent || '').trim() && (o.bg || o.bT || o.grad) && el.children.length) { o.w = Math.round(rr.width); o.h = Math.round(rr.height); o.fs0 = 1; }
+    if (!o.w && cuadrado &&(br >= rr.width / 2 - 1 || (!(el.textContent || '').trim() || (el.textContent || '').trim().length <= 2) && (o.bg || o.grad))) { o.w = Math.round(rr.width); o.h = Math.round(rr.height); o.fs0 = 1; }
     if (cs.position === 'absolute') {
       o.abs = 1;
       o.l = el.style.left && /%$/.test(el.style.left) ? el.style.left : px(cs.left);
@@ -513,6 +537,13 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
       var sv = svgListo(el), r0 = el.getBoundingClientRect(), pr = padre && padre.getBoundingClientRect();
       if (pr && Math.abs((r0.left - pr.left) - (pr.right - r0.right)) < 3 && r0.width < pr.width - 20) sv.c = 1;
       return sv;
+    }
+    if (el.classList && el.classList.contains('handle')) return null;
+    if (el.tagName === 'IMG') {
+      var ri = el.getBoundingClientRect();
+      if (!ri.width || !ri.height) return null;
+      return { k: 'img', src: el.currentSrc || el.src, w: Math.round(ri.width), h: Math.round(ri.height), br: px(cs.borderTopLeftRadius), fit: cs.objectFit || 'cover',
+        b: caja(cs, el, padre), tap: tocable(el, cs) ? rutaDe(el) : null };
     }
     if (el.tagName === 'SELECT') {
       return { k: 'sel', sel: rutaDe(el), v: el.value, opts: [].map.call(el.options, function (o) { return { v: o.value, t: (o.textContent || '').trim() }; }),
@@ -570,11 +601,12 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
       nav: qa('nav .tab').map(function (b) { return { k: b.dataset.t, t: T(b), svg: svgOf(b) }; }), fab: svgOf(q('#add')) };
   }
   // Escribir en un campo de la web desde la app (por ejemplo, el chat financiero)
-  window.__lkIn = function (sel, v) {
+  window.__lkIn = function (sel, v, cambio) {
     var e = q(sel);
     if (!e) return;
     e.value = v;
-    try { e.dispatchEvent(new Event('input', { bubbles: true })); } catch (x) {}
+    try { e.dispatchEvent(new Event('input', { bubbles: true })); if (cambio) e.dispatchEvent(new Event('change', { bubbles: true })); } catch (x) {}
+    sched();
   };
   window.__lkSel = function (sel, v) {
     var e = q(sel);
@@ -589,9 +621,59 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
     try { e.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); } catch (x) {}
     sched();
   };
+  /* ---------- 5d) Ventanas de la web (cuentas, presupuestos, metas, garantías, Notas IA…) ---------- */
+  var NO_HOJA = { sheet: 1, csheet: 1 };
+  function hojaArriba() {
+    var best = null, bz = -1;
+    qa('.sheet.on').forEach(function (sh, i) {
+      if (NO_HOJA[sh.id]) return;
+      var cs = getComputedStyle(sh);
+      if (cs.display === 'none' || cs.visibility === 'hidden') return;
+      var z = parseInt(cs.zIndex, 10) || 0;
+      if (z >= bz) { bz = z; best = sh; }
+    });
+    return best;
+  }
+  function snapHoja(sh) {
+    var panel = sh.firstElementChild || sh, ch = [];
+    [].forEach.call(panel.children, function (el) { var c = espejo(el, panel); if (c) ch.push(c); });
+    var pcs = getComputedStyle(panel), ancho = Math.round(panel.getBoundingClientRect().width - px(pcs.paddingLeft) - px(pcs.paddingRight));
+    return { id: sh.id, tree: ch, ancho: ancho, th: theme(), lang: window.LKLANG || 'es' };
+  }
+  window.__lkCerrarHoja = function (id) {
+    var sh = document.getElementById(id);
+    if (!sh) return;
+    try { sh.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); } catch (e) {}
+    if (sh.classList.contains('on')) sh.classList.remove('on');
+    try { if (id === 'asheet' || id === 'gsheet' || id === 'dsheet' || id === 'rsheet') { EDIT = null; } } catch (e) {}
+    sched();
+  };
+  // Lo que la web abre en su formulario (Notas IA, recibo escaneado, Siri, registrar un pago) → formulario nativo
+  function conPrefill() {
+    if (!FORM_NATIVO || typeof window.prefill !== 'function' || window.prefill.__lk) return;
+    var o = window.prefill;
+    window.prefill = function () {
+      var r = o.apply(this, arguments);
+      setTimeout(function () {
+        try {
+          var sh = document.getElementById('sheet');
+          if (!sh || !sh.classList.contains('on')) return;
+          var g = function (id) { var e = document.getElementById(id); return e ? e.value || '' : ''; };
+          var d = { nuevo: 1, tp: TP, a: parseInt(g('f-amt').replace(/\\D/g, ''), 10) || 0, mer: g('f-mer'), cat: g('f-cat'), sub: g('f-sub'),
+            acc: g('f-acc'), dst: g('f-dst'), date: PFDATE || g('f-date') || iso(0), tit: (document.getElementById('ftitle') || {}).textContent || '' };
+          sh.classList.remove('on');
+          window.__lkFormData();
+          post({ t: 'edit', d: d });
+        } catch (e) { post({ t: 'err', where: 'prefill', msg: String(e && e.message || e) }); }
+      }, 30);
+      return r;
+    };
+    window.prefill.__lk = 1;
+  }
   function state() {
     var tb = typeof tab !== 'undefined' ? tab : null, hv = typeof HV !== 'undefined' ? HV : null;
     var out = vis(q('#auth'));
+    var hoja = out ? null : hojaArriba();
     var home = tb === 'home' && hv === 'fin' && !!q('#app .hd');
     var txv = tb === 'tx' && !!q('#app #q-in');
     var repv = tb === 'rep' && !!q('#app h1');
@@ -600,7 +682,9 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
     var kind = home ? 'home' : txv ? 'tx' : repv ? 'rep' : ahov ? 'aho' : conv ? 'con' : null;
     var S = home ? snap() : null, X = txv ? snapTx() : null, R = (repv || ahov || conv) ? snapEsp() : null;
     if (R) R.kind = kind;
-    return { t: 'state', show: !!(kind && (S || X || R) && !covered()), kind: kind, out: out, tab: tb, snap: S, tx: X, rep: R };
+    var H = hoja ? snapHoja(hoja) : null;
+    var ld = q('.ld-h'), land = !!(ld && vis(ld)) ? { lang: window.LKLANG || 'es', dark: theme().dark } : null;
+    return { t: 'state', show: !!(kind && (S || X || R) && !covered(hoja)), kind: kind, out: out, tab: tb, snap: S, tx: X, rep: R, hoja: H, land: land };
   }
   // En Inicio y Movimientos la app dibuja los números: que la web no los "cuente".
   function conFila() {
@@ -623,6 +707,8 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
     try { conFila(); } catch (e) {}
     try { conDetalle(); } catch (e) {}
     try { conMenu(); } catch (e) {}
+    try { conPrefill(); } catch (e) {}
+    try { conCuentaNativa(); } catch (e) {}
     try { s = state(); } catch (e) { post({ t: 'err', where: 'state', msg: String(e && e.message || e) }); return; }
     var k = JSON.stringify(s);
     if (k !== last) { last = k; post(s); }
@@ -896,10 +982,9 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
   };
 
   /* ---------- 10) Ficha de cuenta nativa ---------- */
-  window.__lkCuenta = function (i) {
-    try {
+  function cuentaData(i, nmax) {
       var a = ACC[+i];
-      if (!a) return;
+      if (!a) return null;
       var n = a.n, b = bal(n), mesK = mesHoy(), entra = 0, sale = 0;
       var lst = tx.filter(function (t) { return t.acc === n || (t.tipo === 'tr' && t.dst === n); }).sort(function (x, y) { return y.date < x.date ? -1 : y.date > x.date ? 1 : y.id - x.id; });
       lst.forEach(function (t) {
@@ -908,7 +993,9 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
       });
       var o = { t: 'cuenta', i: +i, n: n, tile: tileH(accIco(a, 56)), tipo: a.tipo, red: a.red || '', lang: window.LKLANG || 'es', th: theme(), hide: !!window.HIDE,
         mes: TRf(new Date().toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })), entra: mm(entra), sale: mm(sale), total: lst.length,
-        movs: lst.slice(0, 60).map(function (t) {
+        color: a.color || (window.PAL ? PAL[(+i) % PAL.length] : ''), banco: a.banco || '', apodo: a.apodo || '', corte: a.corte ? +a.corte : 0, pri: !!a.pri,
+        tipoN: a.tipo === 'credito' ? Lx('Crédito', 'Credit') : a.tipo === 'efectivo' ? Lx('Efectivo', 'Cash') : Lx('Débito', 'Debit'),
+        movs: lst.slice(0, nmax || 60).map(function (t) {
           var c = t.tipo === 'tr' ? null : (CATS[t.cat] || CATS.otro);
           return { id: String(t.id), t: t.mer, s: TRf(dlabel(t.date)) + ' · ' + (t.tipo === 'tr' ? (t.dst === n ? TRf('Desde') + ' ' + t.acc : TRf('Hacia') + ' ' + (t.dst || '')) : TRf(c[0])),
             a: signo(t, n) + m(t.amt), tone: tono(t, n), ico: catIco(t), p: !!t.pend };
@@ -921,9 +1008,63 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
         var sal = a.ini + b;
         o.saldo = (sal < 0 && !window.HIDE ? '−' : '') + mm(Math.abs(sal)); o.neg = sal < 0;
       }
-      post(o);
-    } catch (e) { post({ t: 'err', where: 'cuenta', msg: String(e && e.message || e) }); }
+      return o;
+  }
+  window.__lkCuenta = function (i) {
+    try { var o = cuentaData(i, 60); if (o) post(o); } catch (e) { post({ t: 'err', where: 'cuenta', msg: String(e && e.message || e) }); }
   };
+  // Carrusel de cuentas y tarjetas
+  window.__lkCuentas = function (at) {
+    try {
+      post({ t: 'cuentas', at: at == null ? 0 : +at, lang: window.LKLANG || 'es', th: theme(), hide: !!window.HIDE,
+        items: ACC.map(function (a, j) { return cuentaData(j, 25); }),
+        T: { tit: Lx('Mis cuentas', 'My accounts'), add: Lx('Agregar cuenta', 'Add account'), addS: Lx('Débito, tarjeta de crédito o efectivo', 'Debit, credit card or cash'),
+          saldo: Lx('Saldo', 'Balance'), usado: Lx('Usado', 'Used'), cupo: Lx('Cupo', 'Limit'), disp: Lx('Disponible', 'Available'), pago: Lx('Día de pago', 'Due day'), corte: Lx('Día de corte', 'Statement day'),
+          info: Lx('Información', 'Details'), entra: Lx('Entró', 'In'), sale: Lx('Salió', 'Out'), movs: Lx('Movimientos', 'Transactions'), sin: Lx('Sin movimientos todavía', 'No transactions yet'),
+          ver: Lx('Ver en Movimientos', 'View in Transactions'), editar: Lx('Editar cuenta', 'Edit account'), tipo: Lx('Tipo', 'Type'), banco: Lx('Banco', 'Bank'), pri: Lx('Cuenta principal', 'Main account') } });
+    } catch (e) { post({ t: 'err', where: 'cuentas', msg: String(e && e.message || e) }); }
+  };
+  // Ver los gastos de una categoría en Movimientos
+  window.__lkVerCat = function (k) {
+    try { FL = { tipo: 'out', cat: k, acc: '' }; Q = ''; tab = 'tx'; SUB = ''; render(); window.scrollTo(0, 0); } catch (e) {}
+    sched();
+  };
+  /* ---------- 10b) Agregar o editar cuenta con vista previa (nativo) ---------- */
+  function accFormData(i) {
+    var a = i >= 0 ? ACC[i] : null;
+    var f = a ? { tipo: a.tipo === 'banco' ? 'debito' : a.tipo, banco: a.banco || '', apodo: a.apodo || '', name: a.n, color: a.color || CLR[0], ini: a.ini || '', cupo: a.cupo || '', red: a.red || '',
+      corte: a.corte || '', pago: a.pago || '', rec: !!a.rec, pri: !!a.pri } : afNew();
+    var hoy = '';
+    if (a) { var bA = bal(a.n), h = a.tipo === 'credito' ? a.ini - bA : a.ini + bA; hoy = (h < 0 ? '−' : '') + m(Math.abs(h)); }
+    return { t: 'accform', i: a ? i : -1, f: f, hoy: hoy, clr: CLR, redes: ['Visa', 'Mastercard', 'Amex', 'Diners Club', 'Otra'],
+      banks: BANKS.concat(['Otro banco']).map(function (n) { return { n: n, tile: tileH(bkTile(n, 40)) }; }), cash: tileH(accIco({ tipo: 'efectivo' }, 40)),
+      lang: window.LKLANG || 'es', th: theme() };
+  }
+  window.__lkAccForm = function (i) {
+    try { post(accFormData(i == null ? -1 : +i)); } catch (e) { post({ t: 'err', where: 'accform', msg: String(e && e.message || e) }); }
+  };
+  var ultimoAviso = '';
+  window.__lkSaveAcc = function (d) {
+    try {
+      AE = d.i >= 0 ? +d.i : -1; ADEL = !!d.del; ultimoAviso = '';
+      AF = { tipo: d.tipo, banco: d.tipo === 'efectivo' ? '' : (d.banco || ''), apodo: d.apodo || '', name: d.name || '', color: d.color || CLR[0], ini: d.ini == null ? '' : d.ini,
+        cupo: d.cupo || '', red: d.red || '', corte: d.corte || '', pago: d.pago || '', rec: !!d.rec, pri: !!d.pri, act: d.act || '' };
+      var antes = JSON.stringify(ACC), n0 = ACC.length;
+      var t0 = window.toast;
+      if (typeof t0 === 'function') window.toast = function (x) { ultimoAviso = String(x || ''); return t0.apply(this, arguments); };
+      try { saveAcc2(!!d.del); } finally { if (typeof t0 === 'function') window.toast = t0; }
+      var ok = JSON.stringify(ACC) !== antes;
+      post({ t: 'accsaved', ok: ok, del: !!d.del, i: ok && !d.del ? (AE >= 0 ? AE : ACC.length > n0 ? ACC.length - 1 : -1) : -1,
+        msg: ok ? '' : (ultimoAviso || Lx('No se pudo guardar. Intenta otra vez.', 'Could not save. Try again.')) });
+    } catch (e) { post({ t: 'accsaved', ok: false, msg: String(e && e.message || e) }); }
+    sched();
+  };
+  // Con la app, "Agregar cuenta" y "Editar cuenta" abren el formulario nativo
+  function conCuentaNativa() {
+    if (!FORM_NATIVO || typeof window.openAcc !== 'function' || window.openAcc.__lk || typeof window.saveAcc2 !== 'function') return;
+    window.openAcc = function (i) { window.__lkAccForm(i); };
+    window.openAcc.__lk = 1;
+  }
   window.__lkEditAcc = function (i) { try { openAcc(+i); } catch (e) {} sched(); };
   window.__lkVerCuenta = function (n) {
     try { FL = { tipo: '', cat: '', acc: n }; Q = ''; tab = 'tx'; SUB = ''; render(); window.scrollTo(0, 0); } catch (e) {}
@@ -1007,6 +1148,7 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
       var s = T(t), now = Date.now();
       if (!s || (s === lastToast && now - lastToastAt < 1500)) return;
       lastToast = s; lastToastAt = now;
+      ultimoAviso = s;
       post({ t: 'toast', s: s });
     }).observe(t, { attributes: true, attributeFilter: ['class'], childList: true, characterData: true, subtree: true });
   }

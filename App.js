@@ -26,8 +26,11 @@ import { WebView } from 'react-native-webview';
 import Inicio from './inicio';
 import Movimientos from './movimientos';
 import Formulario from './formulario';
-import Reportes from './reportes';
+import Reportes, { HojaEspejo } from './reportes';
 import { Cuenta, Detalle, Menu } from './hojas';
+import Cuentas from './cuentas';
+import NuevaCuenta from './nuevacuenta';
+import Bienvenida from './bienvenida';
 import { elegir } from './selector';
 import { puente } from './puente';
 import { BASE, actualizar, copiaGuardada, marcarMala } from './copia';
@@ -35,7 +38,7 @@ import { borrar, guardarJSON, leerJSON } from './almacen';
 import * as Rec from './recordatorios';
 
 export const WEB = BASE;
-const VERSION = '1.4.0';
+const VERSION = '1.6.0';
 
 // Dominios que se abren dentro de la app. Todo lo demás (WhatsApp, correo,
 // Google Sheets, páginas externas) se abre afuera, en su app o en Safari.
@@ -125,6 +128,14 @@ export default function App() {
   const [cuenta, setCuenta] = useState(null);
   const [menu, setMenu] = useState(null);
   const [irA, setIrA] = useState(null);
+  const [hoja, setHoja] = useState(null);
+  const [cuentas, setCuentas] = useState(null);
+  const [cuentasVis, setCuentasVis] = useState(false);
+  const cuentasPend = useRef(false);
+  const [accForm, setAccForm] = useState(null);
+  const [accVis, setAccVis] = useState(false);
+  const [accRes, setAccRes] = useState(null);
+  const [land, setLand] = useState(null);
   const [editar, setEditar] = useState(null);
   const [kind, setKind] = useState('home');
   const [show, setShow] = useState(!!inicial.snap);
@@ -297,6 +308,7 @@ export default function App() {
             setTimeout(() => actualizar().catch(() => {}), 4000);
           }
         }
+        setLand(m.land || null);
         if (m.out) {
           settled.current = true;
           setShow(false);
@@ -319,6 +331,7 @@ export default function App() {
           const sn = m.snap;
           guardarT.current = setTimeout(() => guardarJSON(F_INICIO, sn), 1200);
         }
+        setHoja(m.hoja || null);
         if (m.tx) setTxSnap(m.tx);
         if (m.rep && m.rep.kind) setEsp((o) => ({ ...o, [m.rep.kind]: m.rep }));
         if (m.snap || (m.tab && m.tab !== 'home')) settled.current = true;
@@ -347,6 +360,18 @@ export default function App() {
         setCuenta(m);
       } else if (m.t === 'menu') {
         setMenu(m);
+      } else if (m.t === 'cuentas') {
+        setCuentas(m);
+        if (cuentasPend.current) {
+          cuentasPend.current = false;
+          setCuentasVis(true);
+        }
+      } else if (m.t === 'accform') {
+        setAccForm(m);
+        setAccRes(null);
+        setAccVis(true);
+      } else if (m.t === 'accsaved') {
+        setAccRes(m);
       } else if (m.t === 'edit') {
         setEditar(m.d);
         setFormVis(true);
@@ -452,7 +477,44 @@ export default function App() {
       js(`window.__lkDel&&window.__lkDel(${JSON.stringify(id)})`);
     },
   };
-  const onCuenta = useCallback((i) => js(`window.__lkCuenta&&window.__lkCuenta(${JSON.stringify(i)})`), []);
+  /* ---------- Carrusel de cuentas y formulario de cuenta ---------- */
+  const onCuentas = useCallback((i) => {
+    cuentasPend.current = true;
+    js(`window.__lkCuentas&&window.__lkCuentas(${JSON.stringify(i || 0)})`);
+  }, []);
+  const onCuenta = onCuentas;
+  const hojaCuentas = {
+    onClose: () => setCuentasVis(false),
+    onAdd: () => {
+      setCuentasVis(false);
+      luego(() => js('window.__lkAccForm&&window.__lkAccForm(-1)'));
+    },
+    onEdit: (i) => {
+      setCuentasVis(false);
+      luego(() => js(`window.__lkAccForm&&window.__lkAccForm(${JSON.stringify(i)})`));
+    },
+    onVer: (n) => {
+      setCuentasVis(false);
+      js(`window.__lkVerCuenta&&window.__lkVerCuenta(${JSON.stringify(n)})`);
+    },
+    onDet: (id) => {
+      setCuentasVis(false);
+      luego(() => js(`window.__lkDet&&window.__lkDet(${JSON.stringify(id)})`));
+    },
+  };
+  const hojaNuevaCuenta = {
+    onClose: () => setAccVis(false),
+    onSave: (d) => js(`window.__lkSaveAcc&&window.__lkSaveAcc(${JSON.stringify(d)})`),
+    onVer: (i) => {
+      setAccVis(false);
+      luego(() => onCuentas(i >= 0 ? i : 0));
+    },
+  };
+  const onTransfer = useCallback(() => {
+    setEditar({ nuevo: 1, tp: 'tr', soloTipo: 1 });
+    setFormVis(true);
+    js('window.__lkFormData&&window.__lkFormData()');
+  }, []);
   const hojaCuenta = {
     onClose: () => setCuenta(null),
     onDet: (id) => {
@@ -461,11 +523,7 @@ export default function App() {
     },
     onEditar: (i) => {
       setCuenta(null);
-      luego(() => {
-        tapAt.current = Date.now();
-        setShow(false);
-        js(`window.__lkEditAcc&&window.__lkEditAcc(${JSON.stringify(i)})`);
-      });
+      luego(() => js(`window.__lkEditAcc&&window.__lkEditAcc(${JSON.stringify(i)})`));
     },
     onVer: (n) => {
       setCuenta(null);
@@ -482,9 +540,8 @@ export default function App() {
   };
   const formWeb = useCallback((k) => {
     setFormVis(false);
-    tapAt.current = Date.now();
-    setShow(false);
-    setTimeout(() => js(`window.__lkFormWeb&&window.__lkFormWeb(${JSON.stringify(k)})`), 350);
+    // IA, Foto, Categorías y Nueva cuenta abren ventanas de la web, que ahora se ven como hojas nativas
+    setTimeout(() => js(`window.__lkFormWeb&&window.__lkFormWeb(${JSON.stringify(k)})`), 450);
   }, []);
 
   const onShouldStart = useCallback((req) => {
@@ -506,7 +563,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar style={dark ? 'light' : 'dark'} />
+      <StatusBar style={land || (show && kind === 'home' && snap) || dark ? 'light' : 'dark'} />
       <View style={[s.root, { backgroundColor: fondo }]}>
         {failed ? (
           <SafeAreaView style={s.root}>
@@ -569,6 +626,14 @@ export default function App() {
             webviewDebuggingEnabled={__DEV__}
           />
         )}
+        {land && !failed ? (
+          <Bienvenida
+            land={land}
+            onCrear={() => js(`window.__lkTap&&window.__lkTap(${JSON.stringify('#auth [data-au="up"]')})`)}
+            onEntrar={() => js(`window.__lkTap&&window.__lkTap(${JSON.stringify('#auth .ld-top [data-au="in"]')})`)}
+            onIdioma={() => js(`window.__lkTap&&window.__lkTap(${JSON.stringify('#auth [data-au="lang"]')})`)}
+          />
+        ) : null}
         {!failed && ((kind === 'tx' && txSnap) || esp[kind] || snap) ? (
           <Animated.View style={[StyleSheet.absoluteFill, { opacity }]} pointerEvents={show ? 'auto' : 'none'}>
             {kind === 'tx' && txSnap ? (
@@ -586,7 +651,19 @@ export default function App() {
                 onIrA={() => setIrA(null)}
               />
             ) : (
-              <Inicio snap={snap} viejo={viejo} onTap={onTap} onKeep={onKeep} onRefresh={onRefresh} onNav={onNav} onAdd={abrirForm} onCuenta={onCuenta} />
+              <Inicio
+                snap={snap}
+                viejo={viejo}
+                onTap={onTap}
+                onKeep={onKeep}
+                onRefresh={onRefresh}
+                onNav={onNav}
+                onAdd={abrirForm}
+                onCuenta={onCuenta}
+                onCuentas={onCuentas}
+                onTransfer={onTransfer}
+                onJs={onJs}
+              />
             )}
           </Animated.View>
         ) : null}
@@ -597,9 +674,19 @@ export default function App() {
             </View>
           </View>
         ) : null}
+        <HojaEspejo
+          h={hoja}
+          visible={!!hoja && !formVis && !det && !cuenta && !menu && !cuentasVis && !accVis}
+          onTap={onKeep}
+          onJs={onJs}
+          onClose={() => hoja && js(`window.__lkCerrarHoja&&window.__lkCerrarHoja(${JSON.stringify(hoja.id)})`)}
+          aviso={aviso}
+        />
         <Detalle d={det} {...hojaDet} />
         <Cuenta c={cuenta} {...hojaCuenta} />
         <Menu m={menu} {...hojaMenu} />
+        <Cuentas data={cuentas} visible={cuentasVis} {...hojaCuentas} />
+        <NuevaCuenta D={accForm} visible={accVis} resultado={accRes} {...hojaNuevaCuenta} />
         <Formulario visible={formVis} datos={formData} editar={editar} onClose={cerrarForm} onSave={guardarForm} onWeb={formWeb} onDelete={borrarMov} />
       </View>
     </SafeAreaProvider>

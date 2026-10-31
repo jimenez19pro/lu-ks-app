@@ -2,8 +2,8 @@
 // Se dibuja con componentes del celular usando los datos que manda la web
 // (puente.js → "snap"). Cada toque se le pide a la web (onTap), así toda la
 // lógica (abrir cuentas, presupuestos, movimientos…) sigue siendo la misma.
-import { memo, useCallback, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { Animated, Easing, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SvgXml } from 'react-native-svg';
@@ -89,6 +89,111 @@ const GRID = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-
 export function Ico({ xml, size, color }) {
   if (!xml) return null;
   return <SvgXml xml={xml} width={size} height={size} color={color} />;
+}
+
+
+/* ---------- Números que "cuentan" hasta su valor ---------- */
+function partes(s) {
+  const m = /^([^\d]*?)(\d{1,3}(?:([.,])\d{3})*|\d+)([^\d]*)$/.exec(String(s || ''));
+  if (!m) return null;
+  return { pre: m[1], n: parseInt(m[2].replace(/[.,]/g, ''), 10), sep: m[3] || '.', suf: m[4] };
+}
+function armar(p, n) {
+  const v = String(Math.round(Math.abs(n))).replace(/\B(?=(\d{3})+(?!\d))/g, p.sep);
+  return p.pre + v + p.suf;
+}
+const yaContado = {};
+// Muestra un monto ("$1.812.000") y lo anima cuando cambia. Con "desde0" la primera vez sube desde $0.
+export function Monto({ v, style, desde0, dur = 700, ...p }) {
+  const [txt, setTxt] = useState(() => {
+    const b = partes(v);
+    return desde0 && b && !yaContado[desde0] ? armar(b, 0) : v;
+  });
+  const prev = useRef(desde0 && !yaContado[desde0] ? null : v);
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const b = partes(v);
+    const a = prev.current == null ? (b ? { ...b, n: 0 } : null) : partes(prev.current);
+    prev.current = v;
+    if (desde0) yaContado[desde0] = 1;
+    if (!a || !b || a.n === b.n) {
+      setTxt(v);
+      return undefined;
+    }
+    anim.stopAnimation();
+    anim.setValue(0);
+    const id = anim.addListener(({ value }) => setTxt(armar(b, a.n + (b.n - a.n) * value)));
+    Animated.timing(anim, { toValue: 1, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start(({ finished }) => {
+      if (finished) setTxt(v);
+    });
+    return () => {
+      anim.removeListener(id);
+      anim.stopAnimation();
+    };
+  }, [v]);
+  return (
+    <Text style={style} {...p}>
+      {txt}
+    </Text>
+  );
+}
+
+const Q_ADD = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+const Q_TR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h12l-3-3M17 17H5l3 3"/></svg>';
+const Q_ACC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3 10h18M7 15h3"/></svg>';
+const Q_MAS = '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="18.5" cy="12" r="1.9"/></svg>';
+
+// Barra de gastos por categoría (como "Transactions" del ejemplo): una sola barra partida por colores
+function Gastos({ g, C, f, onJs }) {
+  const crece = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    crece.setValue(0);
+    Animated.timing(crece, { toValue: 1, duration: 800, delay: 150, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, [g && g.n]);
+  if (!g) return null;
+  const its = g.items || [];
+  const top = its.slice(0, 6);
+  const resto = its.slice(6).reduce((x, i) => x + i.a, 0);
+  const partesB = resto > 0 ? [...top, { k: '_', a: resto, c: C.mut }] : top;
+  return (
+    <Tarjeta C={C} style={{ marginTop: 18 }}>
+      <View style={[st.row, { justifyContent: 'space-between', alignItems: 'flex-end' }]}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ color: C.ink, fontSize: f(17), fontWeight: '700' }}>{g.t}</Text>
+          {g.per ? (
+            <Text style={{ color: C.mut, fontSize: f(13), marginTop: 1, textTransform: 'capitalize' }} numberOfLines={1}>
+              {g.per}
+            </Text>
+          ) : null}
+        </View>
+        <Monto v={g.total} style={{ color: C.ink, fontSize: f(24), fontWeight: '700', letterSpacing: -0.4, fontVariant: ['tabular-nums'] }} />
+      </View>
+      {its.length ? (
+        <>
+          <Animated.View style={[st.multi, { transform: [{ scaleX: crece }], transformOrigin: 'left center' }]}>
+            {partesB.map((i) => (
+              <View key={i.k} style={{ flex: i.a, minWidth: 4, backgroundColor: css(i.c, C.ac), borderRadius: 4 }} />
+            ))}
+          </Animated.View>
+          <View style={st.leyenda}>
+            {top.map((i) => (
+              <Toque key={i.k} onPress={() => onJs && onJs(`window.__lkVerCat&&window.__lkVerCat(${JSON.stringify(i.k)})`)} style={st.leyItem} label={i.n}>
+                <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: css(i.c, C.ac) }} />
+                <Text style={{ color: C.mut, fontSize: f(13), flexShrink: 1 }} numberOfLines={1}>
+                  {i.n}
+                </Text>
+                <Text style={{ color: C.ink, fontSize: f(13), fontWeight: '600', fontVariant: ['tabular-nums'] }} numberOfLines={1}>
+                  {i.v}
+                </Text>
+              </Toque>
+            ))}
+          </View>
+        </>
+      ) : (
+        <Text style={{ color: C.mut, fontSize: f(14), marginTop: 10 }}>{g.vacio}</Text>
+      )}
+    </Tarjeta>
+  );
 }
 
 /* ---------- Piezas ---------- */
@@ -201,130 +306,173 @@ export function Fila({ C, f, ico, t, s, right, onPress, last, pend }) {
 }
 
 /* ---------- Pantalla ---------- */
-function Inicio({ snap, onTap, onKeep, onRefresh, onNav, onAdd, onCuenta, viejo }) {
+const OSCURO = '#0A0E1F';
+const blanco = (a) => `rgba(255,255,255,${a})`;
+function Inicio({ snap, onTap, onKeep, onRefresh, onNav, onAdd, onCuenta, onCuentas, onTransfer, onJs, viejo }) {
   const ins = useSafeAreaInsets();
+  const { height: altoPant } = useWindowDimensions();
   const C = tema(snap && snap.th);
   const f = useCallback((n) => Math.round(n * C.z * 10) / 10, [C.z]);
   const [cargando, setCargando] = useState(false);
+  const [altoHd, setAltoHd] = useState(420);
+  const y = useRef(new Animated.Value(0)).current;
   const tap = useCallback((sel) => sel && onTap(sel), [onTap]);
   const keep = useCallback((sel) => sel && onKeep(sel), [onKeep]);
   if (!snap) return null;
   const { hd, hero, gen, pre, rec, last } = snap;
+  const R = snap.rapido || { add: 'Anotar', tr: 'Transferir', acc: 'Cuentas', mas: 'Más' };
   const refrescar = () => {
     setCargando(true);
     onRefresh && onRefresh();
     setTimeout(() => setCargando(false), 900);
   };
-  const barAlto = 58 + Math.max(ins.bottom, 8);
+  const barAlto = altoBarra(ins);
   const sync = hd && hd.sync && !viejo;
+  const fondoHd = [mezcla(C.ac, OSCURO, 0.1), mezcla(C.ac, OSCURO, 0.28), mezcla(C.ac, '#1E1B3A', 0.5)];
+  // Al bajar: el encabezado se queda atrás (más lento) y se desvanece; la hoja de abajo lo tapa.
+  const hdMov = y.interpolate({ inputRange: [0, 600], outputRange: [0, 300], extrapolateLeft: 'clamp' });
+  const hdOp = y.interpolate({ inputRange: [0, altoHd * 0.75], outputRange: [1, 0], extrapolate: 'clamp' });
+  const barraOp = y.interpolate({ inputRange: [altoHd - 170, altoHd - 110], outputRange: [0, 1], extrapolate: 'clamp' });
+  const rapidos = [
+    { k: 'add', t: R.add, svg: Q_ADD, fn: onAdd },
+    { k: 'tr', t: R.tr, svg: Q_TR, fn: onTransfer },
+    { k: 'acc', t: R.acc, svg: Q_ACC, fn: () => onCuentas && onCuentas(0) },
+    { k: 'mas', t: R.mas, svg: Q_MAS, fn: () => keep('#navopen') },
+  ];
   return (
     <View style={[StyleSheet.absoluteFill, { backgroundColor: C.bg }]}>
-      <ScrollView
-        contentContainerStyle={{ paddingTop: ins.top + 10, paddingHorizontal: 16, paddingBottom: barAlto + 28 }}
-        refreshControl={<RefreshControl refreshing={cargando} onRefresh={refrescar} tintColor={C.mut} colors={[C.ac]} progressViewOffset={ins.top} />}
+      {/* Fondo oscuro fijo detrás (se ve al estirar hacia abajo) */}
+      <LinearGradient colors={fondoHd} style={{ position: 'absolute', left: 0, right: 0, top: 0, height: Math.min(altoHd + 40, altoPant) }} />
+      <Animated.ScrollView
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y } } }], { useNativeDriver: true })}
+        scrollEventThrottle={16}
+        contentContainerStyle={{ paddingBottom: barAlto + 28 }}
+        refreshControl={<RefreshControl refreshing={cargando} onRefresh={refrescar} tintColor="#FFFFFF" colors={[C.ac]} progressViewOffset={ins.top} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* Encabezado */}
-        {hd ? (
-          <View style={[st.row, { gap: 12 }]}>
-            <Toque onPress={() => tap('#app .hd [data-go="con"]')} label="Ajustes">
-              <View style={[st.av, { backgroundColor: mezcla(C.ac, C.sf, 0.22) }]}>
-                <Text style={{ color: C.ac, fontSize: f(18), fontWeight: '800' }}>{hd.av}</Text>
+        <Animated.View
+          onLayout={(e) => setAltoHd(e.nativeEvent.layout.height)}
+          style={{ paddingTop: ins.top + 10, paddingHorizontal: 16, paddingBottom: 44, opacity: hdOp, transform: [{ translateY: hdMov }] }}
+        >
+          {/* Encabezado */}
+          {hd ? (
+            <View style={[st.row, { gap: 12 }]}>
+              <Toque onPress={() => tap('#app .hd [data-go="con"]')} label="Ajustes">
+                <View style={[st.av, { backgroundColor: blanco(0.16) }]}>
+                  <Text style={{ color: '#FFFFFF', fontSize: f(18), fontWeight: '800' }}>{hd.av}</Text>
+                </View>
+              </Toque>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <View style={[st.row, { gap: 6 }]}>
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: sync ? '#34C759' : '#FFCC00' }} />
+                  <Text style={{ color: blanco(0.7), fontSize: f(13) }} numberOfLines={1}>
+                    {hd.date}
+                  </Text>
+                </View>
+                <Toque onPress={() => tap('#app [data-lk="hola"]')}>
+                  <Text style={{ color: '#FFFFFF', fontSize: f(21), fontWeight: '700', letterSpacing: -0.4, marginTop: 1 }} numberOfLines={1}>
+                    {hd.hello}
+                  </Text>
+                </Toque>
               </View>
-            </Toque>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <View style={[st.row, { gap: 6 }]}>
-                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: sync ? '#34C759' : '#FFCC00' }} />
-                <Text style={{ color: C.mut, fontSize: f(13) }} numberOfLines={1}>
-                  {hd.date}
-                </Text>
-              </View>
-              <Toque onPress={() => tap('#app [data-lk="hola"]')}>
-                <Text style={{ color: C.ink, fontSize: f(21), fontWeight: '700', letterSpacing: -0.4, marginTop: 1 }} numberOfLines={1}>
-                  {hd.hello}
-                </Text>
+              <Toque onPress={() => keep('#navopen')} label="Menú">
+                <View style={[st.circ, { backgroundColor: blanco(0.14) }]}>
+                  <Ico xml={hd.grid || GRID} size={22} color="#FFFFFF" />
+                </View>
               </Toque>
             </View>
-            <Toque onPress={() => keep('#navopen')} label="Menú">
-              <View style={[st.circ, { backgroundColor: C.sf }]}>
-                <Ico xml={hd.grid || GRID} size={22} color={C.ink} />
+          ) : null}
+
+          {/* Frase del día */}
+          {snap.frase && snap.frase.t ? (
+            <View style={[st.row, st.frase, { backgroundColor: blanco(0.1) }]}>
+              {snap.frase.svg ? <Ico xml={snap.frase.svg} size={f(16)} color={blanco(0.75)} /> : null}
+              <Text style={{ color: blanco(0.8), fontSize: f(14), flex: 1, lineHeight: f(19) }}>{snap.frase.t}</Text>
+            </View>
+          ) : null}
+
+          {/* Finanzas | Ahorros y deudas */}
+          {snap.seg && snap.seg.length ? (
+            <View style={[st.seg, { backgroundColor: blanco(0.12) }]}>
+              {snap.seg.map((b) => (
+                <Toque key={b.k} onPress={() => (b.on ? null : keep(`#app [data-hv="${b.k}"]`))} style={[st.segB, b.on && { backgroundColor: '#FFFFFF', ...st.sombra }]}>
+                  <Text style={{ color: b.on ? OSCURO : blanco(0.75), fontSize: f(14), fontWeight: '600' }}>{b.t}</Text>
+                </Toque>
+              ))}
+            </View>
+          ) : null}
+
+          {/* Período */}
+          {snap.per ? (
+            <View style={[st.row, { gap: 6, marginTop: 12 }]}>
+              <Toque onPress={() => tap('#peropen')} style={[st.row, st.chip, { backgroundColor: blanco(0.12) }]}>
+                {snap.per.cal ? <Ico xml={snap.per.cal} size={16} color="#FFFFFF" /> : null}
+                <Text style={{ color: '#FFFFFF', fontSize: f(14), fontWeight: '500' }}>{snap.per.chip}</Text>
+                <View style={{ transform: [{ rotate: '90deg' }] }}>
+                  <Ico xml={CHEV} size={12} color={blanco(0.6)} />
+                </View>
+              </Toque>
+              {snap.per.prev ? (
+                <>
+                  <Toque onPress={() => keep('#app .pnav[data-off="-1"]')} style={[st.pnav, { backgroundColor: blanco(0.12) }]} label="Período anterior">
+                    <View style={{ transform: [{ rotate: '180deg' }] }}>
+                      <Ico xml={CHEV} size={14} color="#FFFFFF" />
+                    </View>
+                  </Toque>
+                  <Text style={{ color: blanco(0.7), fontSize: f(13), textTransform: 'capitalize' }}>{snap.per.label}</Text>
+                  <Toque
+                    onPress={() => keep('#app .pnav[data-off="1"]')}
+                    disabled={snap.per.nextOff}
+                    style={[st.pnav, { backgroundColor: blanco(0.12), opacity: snap.per.nextOff ? 0.35 : 1 }]}
+                    label="Período siguiente"
+                  >
+                    <Ico xml={CHEV} size={14} color="#FFFFFF" />
+                  </Toque>
+                </>
+              ) : null}
+            </View>
+          ) : null}
+
+          {/* Saldo grande */}
+          {hero ? (
+            <View style={{ marginTop: 22 }}>
+              <View style={[st.row, { gap: 10 }]}>
+                <Text style={{ color: blanco(0.75), fontSize: f(15), fontWeight: '500' }}>{hero.lb}</Text>
+                <Toque onPress={() => keep('#app [data-eye]')} hitSlop={10} label="Mostrar u ocultar montos">
+                  <Ico xml={snap.hide ? EYE_OFF : EYE} size={20} color={blanco(0.75)} />
+                </Toque>
               </View>
-            </Toque>
-          </View>
-        ) : null}
+              <Monto
+                v={hero.v}
+                desde0="hero"
+                style={{ color: hero.neg ? '#FF8A80' : '#FFFFFF', fontSize: f(46), fontWeight: '700', letterSpacing: -1, marginTop: 2, fontVariant: ['tabular-nums'] }}
+                adjustsFontSizeToFit
+                numberOfLines={1}
+              />
+              <Barra bar={hero.bar} C={C} track={blanco(0.18)} blanco alto={6} />
+              {hero.sub ? <Text style={{ color: blanco(0.72), fontSize: f(13), marginTop: 8, lineHeight: f(18) }}>{hero.sub}</Text> : null}
+            </View>
+          ) : null}
 
-        {/* Frase del día */}
-        {snap.frase && snap.frase.t ? (
-          <View style={[st.row, st.frase, { backgroundColor: C.sf }]}>
-            {snap.frase.svg ? <Ico xml={snap.frase.svg} size={f(16)} color={C.mut} /> : null}
-            <Text style={{ color: C.mut, fontSize: f(14), flex: 1, lineHeight: f(19) }}>{snap.frase.t}</Text>
-          </View>
-        ) : null}
-
-        {/* Finanzas | Ahorros y deudas */}
-        {snap.seg && snap.seg.length ? (
-          <View style={[st.seg, { backgroundColor: C.sf2 }]}>
-            {snap.seg.map((b) => (
-              <Toque key={b.k} onPress={() => (b.on ? null : keep(`#app [data-hv="${b.k}"]`))} style={[st.segB, b.on && { backgroundColor: C.dark ? '#636366' : C.sf, ...st.sombra }]}>
-                <Text style={{ color: b.on ? C.ink : C.mut, fontSize: f(14), fontWeight: '600' }}>{b.t}</Text>
+          {/* Botones rápidos */}
+          <View style={[st.row, { justifyContent: 'space-between', marginTop: 22 }]}>
+            {rapidos.map((b) => (
+              <Toque key={b.k} onPress={b.fn} style={st.rap} label={b.t}>
+                <View style={[st.rapI, { backgroundColor: blanco(0.12), borderColor: blanco(0.14) }]}>
+                  <Ico xml={b.svg} size={24} color="#FFFFFF" />
+                </View>
+                <Text style={{ color: blanco(0.85), fontSize: f(12), fontWeight: '600', marginTop: 6 }} numberOfLines={1}>
+                  {b.t}
+                </Text>
               </Toque>
             ))}
           </View>
-        ) : null}
+        </Animated.View>
 
-        {/* Período */}
-        {snap.per ? (
-          <View style={[st.row, { gap: 6, marginTop: 12 }]}>
-            <Toque onPress={() => tap('#peropen')} style={[st.row, st.chip, { backgroundColor: C.sf2 }]}>
-              {snap.per.cal ? <Ico xml={snap.per.cal} size={16} color={C.ink} /> : null}
-              <Text style={{ color: C.ink, fontSize: f(14), fontWeight: '500' }}>{snap.per.chip}</Text>
-              <View style={{ transform: [{ rotate: '90deg' }] }}>
-                <Ico xml={CHEV} size={12} color={C.mut} />
-              </View>
-            </Toque>
-            {snap.per.prev ? (
-              <>
-                <Toque onPress={() => keep('#app .pnav[data-off="-1"]')} style={[st.pnav, { backgroundColor: C.sf2 }]} label="Período anterior">
-                  <View style={{ transform: [{ rotate: '180deg' }] }}>
-                    <Ico xml={CHEV} size={14} color={C.ink} />
-                  </View>
-                </Toque>
-                <Text style={{ color: C.mut, fontSize: f(13), textTransform: 'capitalize' }}>{snap.per.label}</Text>
-                <Toque
-                  onPress={() => keep('#app .pnav[data-off="1"]')}
-                  disabled={snap.per.nextOff}
-                  style={[st.pnav, { backgroundColor: C.sf2, opacity: snap.per.nextOff ? 0.35 : 1 }]}
-                  label="Período siguiente"
-                >
-                  <Ico xml={CHEV} size={14} color={C.ink} />
-                </Toque>
-              </>
-            ) : null}
-          </View>
-        ) : null}
-
-        {/* Tarjeta principal */}
-        {hero ? (
-          <LinearGradient
-            colors={[C.ac, mezcla(C.ac, '#000000', 0.7), mezcla(C.ac, '#5E5CE6', 0.55)]}
-            locations={[0, 0.6, 1]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[st.hero, { shadowColor: C.ac }]}
-          >
-            <View style={[st.row, { justifyContent: 'space-between' }]}>
-              <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: f(15), fontWeight: '500' }}>{hero.lb}</Text>
-              <Toque onPress={() => keep('#app [data-eye]')} hitSlop={10} label="Mostrar u ocultar montos">
-                <Ico xml={snap.hide ? EYE_OFF : EYE} size={22} color="rgba(255,255,255,0.9)" />
-              </Toque>
-            </View>
-            <Text style={{ color: '#FFFFFF', fontSize: f(38), fontWeight: '700', letterSpacing: -0.6, marginTop: 4, fontVariant: ['tabular-nums'] }} adjustsFontSizeToFit numberOfLines={1}>
-              {hero.v}
-            </Text>
-            <Barra bar={hero.bar} C={C} track="rgba(255,255,255,0.28)" blanco />
-            {hero.sub ? <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: f(13), marginTop: 8, lineHeight: f(18) }}>{hero.sub}</Text> : null}
-          </LinearGradient>
-        ) : null}
+        {/* Hoja clara que sube sobre el encabezado */}
+        <View style={[st.hoja, { backgroundColor: C.bg, minHeight: altoPant - ins.top - 60 }]}>
+          <View style={[st.agarre, { backgroundColor: C.ln }]} />
+          <Gastos g={snap.gastos} C={C} f={f} onJs={onJs} />
 
         {/* General */}
         <Seccion s={gen} C={C} f={f} onTap={tap} keep={keep} />
@@ -575,7 +723,19 @@ function Inicio({ snap, onTap, onKeep, onRefresh, onNav, onAdd, onCuenta, viejo 
             ) : null}
           </>
         ) : null}
-      </ScrollView>
+        </View>
+      </Animated.ScrollView>
+
+      {/* Barra compacta arriba al bajar */}
+      <Animated.View pointerEvents="none" style={[st.compacta, { opacity: barraOp, height: ins.top + 50 }]}>
+        <LinearGradient colors={[fondoHd[0], fondoHd[1]]} style={StyleSheet.absoluteFill} />
+        <View style={[st.row, { justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 12 }]}>
+          <Text style={{ color: blanco(0.75), fontSize: f(14), fontWeight: '500' }} numberOfLines={1}>
+            {hero ? hero.lb : ''}
+          </Text>
+          <Text style={{ color: '#FFFFFF', fontSize: f(17), fontWeight: '700', fontVariant: ['tabular-nums'] }}>{hero ? hero.v : ''}</Text>
+        </View>
+      </Animated.View>
 
       <BarraAbajo snap={snap} C={C} activo="home" onNav={onNav} onAdd={onAdd} />
     </View>
@@ -584,39 +744,51 @@ function Inicio({ snap, onTap, onKeep, onRefresh, onNav, onAdd, onCuenta, viejo 
 
 export default memo(Inicio);
 
-// Barra de abajo (igual a la de la web), compartida por Inicio y Movimientos.
+// Barra de abajo flotante (píldora) compartida por todas las pantallas nativas.
+let ultimoTab = null;
 export function altoBarra(ins) {
-  return 58 + Math.max(ins.bottom, 8);
+  return 72 + Math.max(ins.bottom, 10);
 }
 export function BarraAbajo({ snap, C, activo, onNav, onAdd }) {
   const ins = useSafeAreaInsets();
-  const alto = altoBarra(ins);
+  const tabs = (snap && snap.nav) || [];
+  const idx = tabs.findIndex((b) => b.k === activo);
+  const [ancho, setAncho] = useState(0);
+  const x = useRef(new Animated.Value(0)).current;
+  const tw = tabs.length ? ancho / tabs.length : 0;
+  useEffect(() => {
+    if (!tw || idx < 0) return;
+    const desde = ultimoTab != null && ultimoTab !== idx ? ultimoTab : idx;
+    x.setValue(desde * tw);
+    Animated.spring(x, { toValue: idx * tw, useNativeDriver: true, speed: 14, bounciness: 7 }).start();
+    ultimoTab = idx;
+  }, [tw, idx]);
   return (
-    <View style={[st.nav, { height: alto, paddingBottom: Math.max(ins.bottom, 8), backgroundColor: alfa(C.bg, 0.96), borderTopColor: C.ln }]}>
-      {(snap.nav || []).map((b, i) => {
-        const on = b.k === activo;
-        const tab = (
-          <Toque key={b.k} onPress={on ? null : () => onNav && onNav(b.k)} style={st.tab} label={b.t}>
-            <Ico xml={b.svg} size={25} color={on ? C.ac : C.mut} />
-            <Text style={{ color: on ? C.ac : C.mut, fontSize: 10.5, fontWeight: '500', marginTop: 2 }} numberOfLines={1}>
-              {b.t}
-            </Text>
-          </Toque>
-        );
-        if (i === 2) {
-          return [
-            <View key="fab" style={st.tab}>
-              <Toque onPress={onAdd} label="Agregar movimiento">
-                <View style={[st.fab, { backgroundColor: C.ac, shadowColor: C.ac, borderColor: C.bg }]}>
-                  <Ico xml={snap.fab || PLUS} size={30} color="#FFFFFF" />
-                </View>
-              </Toque>
-            </View>,
-            tab,
-          ];
-        }
-        return tab;
-      })}
+    <View pointerEvents="box-none" style={[st.navW, { paddingBottom: Math.max(ins.bottom, 10) }]}>
+      <View
+        onLayout={(e) => setAncho(e.nativeEvent.layout.width - 8)}
+        style={[st.pill, { backgroundColor: C.dark ? 'rgba(38,38,40,0.96)' : 'rgba(255,255,255,0.97)', borderColor: C.ln }]}
+      >
+        {tw && idx >= 0 ? (
+          <Animated.View style={[st.pillOn, { width: tw, backgroundColor: alfa(C.ac, C.dark ? 0.26 : 0.13), transform: [{ translateX: x }] }]} />
+        ) : null}
+        {tabs.map((b) => {
+          const on = b.k === activo;
+          return (
+            <Toque key={b.k} onPress={on ? null : () => onNav && onNav(b.k)} style={st.tab} label={b.t}>
+              <Ico xml={b.svg} size={23} color={on ? C.ac : C.mut} />
+              <Text style={{ color: on ? C.ac : C.mut, fontSize: 10.5, fontWeight: on ? '700' : '500', marginTop: 2 }} numberOfLines={1}>
+                {b.t}
+              </Text>
+            </Toque>
+          );
+        })}
+      </View>
+      <Toque onPress={onAdd} label="Agregar movimiento">
+        <View style={[st.fab, { backgroundColor: C.ac, shadowColor: C.ac }]}>
+          <Ico xml={(snap && snap.fab) || PLUS} size={28} color="#FFFFFF" />
+        </View>
+      </Toque>
     </View>
   );
 }
@@ -640,7 +812,17 @@ const st = StyleSheet.create({
   ghost: { flex: 1, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', paddingVertical: 11, paddingHorizontal: 8, borderRadius: 14 },
   fila: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
   mini: { paddingVertical: 3, paddingHorizontal: 10, borderRadius: 999 },
-  nav: { position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', alignItems: 'flex-start', paddingTop: 6, borderTopWidth: StyleSheet.hairlineWidth },
-  tab: { flex: 1, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 2 },
-  fab: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', marginTop: -24, borderWidth: 4, shadowOpacity: 0.45, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 8 },
+  navW: { position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 },
+  pill: { flex: 1, height: 62, borderRadius: 31, flexDirection: 'row', alignItems: 'center', padding: 4, borderWidth: StyleSheet.hairlineWidth, shadowColor: '#000', shadowOpacity: 0.14, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 10 },
+  pillOn: { position: 'absolute', left: 4, top: 4, bottom: 4, borderRadius: 27 },
+  tab: { flex: 1, height: '100%', alignItems: 'center', justifyContent: 'center' },
+  fab: { width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 10 },
+  hoja: { marginTop: -26, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 16, paddingTop: 8 },
+  agarre: { alignSelf: 'center', width: 38, height: 5, borderRadius: 3, marginBottom: 2 },
+  compacta: { position: 'absolute', left: 0, right: 0, top: 0, justifyContent: 'flex-end', overflow: 'hidden' },
+  rap: { width: '23%', alignItems: 'center' },
+  rapI: { width: 58, height: 58, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth },
+  multi: { flexDirection: 'row', gap: 3, height: 12, marginTop: 14 },
+  leyenda: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 12, rowGap: 10 },
+  leyItem: { width: '50%', flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: 10 },
 });

@@ -10,10 +10,16 @@
     },
     "production": {
       "autoIncrement": true,
-      "channel": "production"
+      "channel": "main"
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft"
+      },
+      "ios": {}
+    }
   }
 }

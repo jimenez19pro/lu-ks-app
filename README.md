@@ -34,6 +34,19 @@ dentro de una app.
 - **Menú de navegación nativo** (`hojas.js`): el botón de cuadritos abre "Ir a…" con buscador; lleva a la sección exacta.
 - **Fotos y archivos** (`selector.js`): cuando la web pide una foto o un archivo (recibos, garantías, importar respaldo), se abre el selector del iPhone (cámara o Fotos).
 
+## Etapa 2e (31 oct 2026)
+- **Ventanas nativas**: nueva cuenta (tipo, banco, saldo), presupuestos, metas (con calendario), deudas, pagos recurrentes (listas nativas), garantías (con fotos) y Notas IA se ven como hojas de iPhone que se cierran deslizando (`HojaEspejo` en `reportes.js`).
+- **Notas IA**: lo que entiende el asistente abre el formulario nativo ya lleno.
+- **Lista para publicar** (`publicar/`): textos de las tiendas, capturas, gráfico de Google Play, íconos y guía paso a paso (`COMO-PUBLICAR.md`). `.eas/workflows/tiendas.yml` arma y envía la app cuando cambia `publicar/LANZAR.txt`. `store.config.json` tiene los textos del App Store. Sin permiso de micrófono y sin el botón de Google (no funciona dentro de la app).
+
+## Etapa 3a — diseño nuevo (31 oct 2026)
+- **Inicio estilo banco** (`inicio.js`): arriba un fondo oscuro con el saldo grande que "cuenta" hasta su valor (`Monto`), y al bajar la hoja clara sube sobre él (aparece una barra compacta con el saldo). Botones rápidos: Anotar, Transferir, Cuentas y Más.
+- **Barra de gastos por colores**: una sola barra partida por categorías con su leyenda; tocar una categoría abre Movimientos filtrado.
+- **Carrusel de cuentas y tarjetas** (`cuentas.js`): tarjetas que se deslizan de lado, saldo animado, información, movimientos, Ver en Movimientos y Editar. Al final, "Agregar cuenta".
+- **Agregar/editar cuenta con vista previa en vivo** (`nuevacuenta.js`): la tarjeta de arriba cambia mientras escribes (banco, apodo, red, color, cupo); se voltea al escribir el día de corte y de pago; al guardar, animación de pasos y "¡Cuenta agregada!". Guarda con la lógica de la web (`__lkSaveAcc` → `saveAcc2`). No pide números de tarjeta.
+- **Bienvenida animada** (`bienvenida.js`): las piezas forman el ícono, un degradado barre la pantalla y aparecen el mensaje y los botones.
+- **Barra de abajo flotante**: píldora con el ícono activo resaltado que se desliza al cambiar de pestaña, y el botón + al lado.
+
 ## Archivos
 | Archivo | Qué es |
 |---|---|
@@ -42,6 +55,9 @@ dentro de una app.
 | `movimientos.js` | Movimientos nativo |
 | `formulario.js` | Formulario de anotar y editar nativo |
 | `reportes.js` | Pantallas "espejo": Reportes, Ahorros y deudas, Ajustes |
+| `cuentas.js` | Carrusel de cuentas y tarjetas (y la tarjeta "de plástico") |
+| `nuevacuenta.js` | Agregar o editar cuenta con vista previa en vivo |
+| `bienvenida.js` | Bienvenida animada |
 | `hojas.js` | Hojas nativas: detalle del movimiento, ficha de cuenta, menú |
 | `selector.js` | Selector de fotos y archivos del iPhone para la web |
 | `puente.js` | Código que corre dentro de la web y le manda datos a la app |
@@ -49,6 +65,9 @@ dentro de una app.
 | `recordatorios.js` | Recordatorios en el celular |
 | `almacen.js` | Guardar y leer archivos en el celular |
 | `index.js` | Arranque |
+| `store.config.json` | Textos del App Store (español e inglés) |
+| `publicar/` | Todo para las tiendas: guía, textos, capturas, íconos |
+| `.eas/workflows/` | `publicar.yml` (actualizaciones) y `tiendas.yml` (enviar a las tiendas) |
 | `app.json` | Nombre, ícono, permisos, identificador `com.jimenez19pro.luks` |
 | `eas.json` | Configuración de Expo (EAS) para armar la app |
 | `package.json`, `package-lock.json` | Librerías (Expo SDK 58) |
@@ -56,4 +75,4 @@ dentro de una app.
 
 ## Siguientes etapas
 - Etapa 2 (sigue): pasar más pantallas a nativo, inicio de sesión con Google nativo (necesita compilación propia).
-- Etapa 3: publicar en App Store (US$99/año) y Google Play (US$25 una vez).
+- Etapa 3: publicar en App Store (US$99/año) y Google Play (US$25 una vez). Todo listo; ver `publicar/COMO-PUBLICAR.md`.
