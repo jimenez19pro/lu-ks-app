@@ -134,7 +134,7 @@ export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, 
         });
       },
       onPanResponderMove: (_, g) => {
-        let v = inicio - g.dx / (CW * 0.62);
+        let v = inicio - g.dx / (CW + 18);
         const max = nRef.current - 1;
         if (v < 0) v = v * 0.3; // resistencia en los bordes
         if (v > max) v = max + (v - max) * 0.3;
@@ -170,10 +170,10 @@ export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, 
 
   const pagina = (item, i) => {
     const r = [i - 2, i - 1, i, i + 1, i + 2];
-    const mx = pos.interpolate({ inputRange: r, outputRange: [CW * 0.8, CW * 0.55, 0, -CW * 0.55, -CW * 0.8], extrapolate: 'clamp' });
-    const esc = pos.interpolate({ inputRange: r, outputRange: [0.72, 0.85, 1, 0.85, 0.72], extrapolate: 'clamp' });
-    const sombra = pos.interpolate({ inputRange: r, outputRange: [0.5, 0.3, 0, 0.3, 0.5], extrapolate: 'clamp' });
-    const giro = pos.interpolate({ inputRange: r, outputRange: ['-16deg', '-10deg', '0deg', '10deg', '16deg'], extrapolate: 'clamp' });
+    const mx = pos.interpolate({ inputRange: r, outputRange: [(CW + 18) * 2, CW + 18, 0, -(CW + 18), -(CW + 18) * 2], extrapolate: 'extend' });
+    const esc = pos.interpolate({ inputRange: r, outputRange: [0.86, 0.9, 1, 0.9, 0.86], extrapolate: 'clamp' });
+    const sombra = pos.interpolate({ inputRange: r, outputRange: [0.25, 0.18, 0, 0.18, 0.25], extrapolate: 'clamp' });
+    const giro = pos.interpolate({ inputRange: r, outputRange: ['-4deg', '-3deg', '0deg', '3deg', '4deg'], extrapolate: 'clamp' });
     const d = Math.abs(i - idx);
     const entra = abre.interpolate({ inputRange: [0, 1], outputRange: [W * (0.9 + d * 0.35), 0] });
     return (

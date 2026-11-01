@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Keyboard,
   Animated,
   Easing,
   KeyboardAvoidingView,
@@ -76,6 +77,14 @@ const TX = {
   errCupo: ['Escribe el cupo total', 'Enter the credit limit'],
   corteYpago: ['Corte', 'Statement'],
 };
+function tilePropio(n) {
+  const s = String(n || '?');
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
+  const w = s.split(' ').filter((x) => ['de', 'del', 'la', 'banco'].indexOf(x.toLowerCase()) < 0);
+  const p = w.length ? w : [s];
+  return { t: (p[0][0] + (p[1] ? p[1][0] : '')).toUpperCase(), bg: `hsl(${h}, 45%, 42%)`, c: '#FFFFFF' };
+}
 const solo = (s) => String(s == null ? '' : s).replace(/\D/g, '');
 const miles = (s) => {
   const d = solo(s);
@@ -102,6 +111,9 @@ export default function NuevaCuenta({ D, visible, resultado, onClose, onSave, on
   const esperando = useRef(false);
   const animLista = useRef(false);
 
+  useEffect(() => {
+    if (!visible) Keyboard.dismiss();
+  }, [visible]);
   useEffect(() => {
     if (!visible || !D) return;
     setF({ ...D.f, act: '', cupo: D.f.cupo ? String(D.f.cupo) : '' });
@@ -148,7 +160,7 @@ export default function NuevaCuenta({ D, visible, resultado, onClose, onSave, on
     setError('');
     setF((v) => ({ ...v, ...o }));
   };
-  const tileBanco = ef ? D.cash : ((D.banks || []).find((b) => b.n === f.banco) || {}).tile;
+  const tileBanco = ef ? D.cash : ((D.banks || []).find((b) => b.n === f.banco) || {}).tile || (f.banco ? tilePropio(f.banco) : null);
   const color = cr ? f.color : ef ? '#C9A227' : (tileBanco && tileBanco.bg) || '#4A63E7';
   const nombreVis = (f.apodo || '').trim() || (f.banco || '').trim() || (ef ? t('efectivo') : en ? 'Your account' : 'Tu cuenta');
   const tipoN = t(f.tipo === 'credito' ? 'credito' : f.tipo === 'efectivo' ? 'efectivo' : 'debito');
@@ -161,6 +173,7 @@ export default function NuevaCuenta({ D, visible, resultado, onClose, onSave, on
   const dorso = giro.interpolate({ inputRange: [0, 1], outputRange: ['180deg', '360deg'] });
 
   const guardar = () => {
+    Keyboard.dismiss();
     if (!ef && !f.banco) return setError(t('errBanco'));
     const nm = (f.name || '').trim() || (f.apodo || '').trim() || (f.banco || '').trim() || (ef ? 'Efectivo' : '');
     if (!nm) return setError(t('errNombre'));
@@ -255,16 +268,41 @@ export default function NuevaCuenta({ D, visible, resultado, onClose, onSave, on
         {pag === 'bank' ? (
           <View style={{ flex: 1 }}>
             <View style={[st.hd, { borderBottomColor: C.ln }]}>
-              <Toque onPress={() => setPag('main')} hitSlop={10}>
+              <Toque
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setPag('main');
+                }}
+                hitSlop={10}
+              >
                 <Text style={{ color: C.ac, fontSize: 17 }}>‹ {t('banco')}</Text>
               </Toque>
             </View>
             <TextInput value={q} onChangeText={setQ} placeholder={t('buscar')} placeholderTextColor={C.mut} style={[st.in, { backgroundColor: C.sf, color: C.ink, margin: 16 }]} autoFocus />
-            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: ins.bottom + 20 }}>
+            <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: ins.bottom + 20 }}>
+              {q.trim() && !(D.banks || []).some((b) => b.n.toLowerCase() === q.trim().toLowerCase()) ? (
+                <Toque
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    set({ banco: q.trim() });
+                    setPag('main');
+                  }}
+                  label={q.trim()}
+                >
+                  <View style={[st.fila, { gap: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.ln }]}>
+                    <Tile tile={tilePropio(q.trim())} z={40} C={C} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: C.ink, fontSize: 16, fontWeight: '600' }}>{(en ? 'Use ' : 'Usar ') + '«' + q.trim() + '»'}</Text>
+                      <Text style={{ color: C.mut, fontSize: 13 }}>{en ? 'Not in the list? Add it with this name' : '¿No está en la lista? Agrégalo con este nombre'}</Text>
+                    </View>
+                  </View>
+                </Toque>
+              ) : null}
               {bancos.map((b) => (
                 <Toque
                   key={b.n}
                   onPress={() => {
+                    Keyboard.dismiss();
                     set({ banco: b.n });
                     setPag('main');
                   }}
@@ -288,7 +326,7 @@ export default function NuevaCuenta({ D, visible, resultado, onClose, onSave, on
               <Text style={{ color: C.ink, fontSize: 17, fontWeight: '700' }}>{edit ? t('editar') : t('nueva')}</Text>
               <View style={{ width: 60 }} />
             </View>
-            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingBottom: ins.bottom + 40 }}>
+            <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={{ padding: 20, paddingBottom: ins.bottom + 40 }}>
               {preview}
 
               {/* Tipo */}
