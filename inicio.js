@@ -123,7 +123,17 @@ export function Monto({ v, style, desde0, dur = 700, pausa, ...p }) {
     }
     anim.stopAnimation();
     anim.setValue(0);
-    const id = anim.addListener(({ value }) => setTxt(armar(b, a.n + (b.n - a.n) * value)));
+    let ultimo = 0, previo = '';
+    const id = anim.addListener(({ value }) => {
+      const ahora = Date.now();
+      if (ahora - ultimo < 33 && value < 1) return;
+      ultimo = ahora;
+      const t = armar(b, a.n + (b.n - a.n) * value);
+      if (t !== previo) {
+        previo = t;
+        setTxt(t);
+      }
+    });
     Animated.timing(anim, { toValue: 1, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start(({ finished }) => {
       if (finished) setTxt(v);
     });
@@ -328,7 +338,7 @@ function Inicio({ snap, onTap, onKeep, onRefresh, onNav, onAdd, onCuenta, onCuen
     if (!listo || entradaHecha || !snap) return;
     entradaHecha = true;
     setPausa(false);
-    Animated.timing(ent, { toValue: 1, duration: 1250, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    Animated.timing(ent, { toValue: 1, duration: 850, easing: Easing.out(Easing.exp), useNativeDriver: true }).start();
   }, [listo, !!snap]);
   const tramo = (a, b, de, a2) => ent.interpolate({ inputRange: [a, b], outputRange: [de, a2], extrapolate: 'clamp' });
   const tap = useCallback((sel) => sel && onTap(sel), [onTap]);
@@ -371,7 +381,7 @@ function Inicio({ snap, onTap, onKeep, onRefresh, onNav, onAdd, onCuenta, onCuen
         >
           {/* Encabezado */}
           {hd ? (
-            <Animated.View style={[st.row, { gap: 12, opacity: tramo(0, 0.25, 0, 1), transform: [{ translateY: tramo(0, 0.3, -14, 0) }] }]}>
+            <Animated.View style={[st.row, { gap: 12, opacity: tramo(0, 0.35, 0, 1), transform: [{ translateY: tramo(0, 0.5, 10, 0) }] }]}>
               <Toque onPress={() => tap('#app .hd [data-go="con"]')} label="Ajustes">
                 <View style={[st.av, { backgroundColor: blanco(0.16) }]}>
                   <Text style={{ color: '#FFFFFF', fontSize: f(18), fontWeight: '800' }}>{hd.av}</Text>
@@ -450,7 +460,7 @@ function Inicio({ snap, onTap, onKeep, onRefresh, onNav, onAdd, onCuenta, onCuen
 
           {/* Saldo grande */}
           {hero ? (
-            <Animated.View style={{ marginTop: 22, opacity: tramo(0.1, 0.35, 0, 1), transform: [{ translateY: tramo(0.1, 0.4, 16, 0) }] }}>
+            <Animated.View style={{ marginTop: 22, opacity: tramo(0.05, 0.4, 0, 1), transform: [{ translateY: tramo(0.05, 0.55, 14, 0) }] }}>
               <View style={[st.row, { gap: 10 }]}>
                 <Text style={{ color: blanco(0.75), fontSize: f(15), fontWeight: '500' }}>{hero.lb}</Text>
                 <Toque onPress={() => keep('#app [data-eye]')} hitSlop={10} label="Mostrar u ocultar montos">
@@ -461,7 +471,7 @@ function Inicio({ snap, onTap, onKeep, onRefresh, onNav, onAdd, onCuenta, onCuen
                 v={hero.v}
                 desde0="hero"
                 pausa={pausa}
-                dur={1100}
+                dur={800}
                 style={{ color: hero.neg ? '#FF8A80' : '#FFFFFF', fontSize: f(46), fontWeight: '700', letterSpacing: -1, marginTop: 2, fontVariant: ['tabular-nums'] }}
                 adjustsFontSizeToFit
                 numberOfLines={1}
@@ -479,7 +489,7 @@ function Inicio({ snap, onTap, onKeep, onRefresh, onNav, onAdd, onCuenta, onCuen
                   style={[
                     st.rapI,
                     { backgroundColor: blanco(0.12), borderColor: blanco(0.14) },
-                    { opacity: tramo(0.3 + i * 0.07, 0.45 + i * 0.07, 0, 1), transform: [{ scale: ent.interpolate({ inputRange: [0.3 + i * 0.07, 0.48 + i * 0.07, 0.56 + i * 0.07], outputRange: [0.4, 1.12, 1], extrapolate: 'clamp' }) }] },
+                    { opacity: tramo(0.12 + i * 0.05, 0.45 + i * 0.05, 0, 1), transform: [{ scale: tramo(0.12 + i * 0.05, 0.6 + i * 0.05, 0.86, 1) }] },
                   ]}
                 >
                   <Ico xml={b.svg} size={24} color="#FFFFFF" />
@@ -493,7 +503,7 @@ function Inicio({ snap, onTap, onKeep, onRefresh, onNav, onAdd, onCuenta, onCuen
         </Animated.View>
 
         {/* Hoja clara que sube sobre el encabezado */}
-        <Animated.View style={[st.hoja, { backgroundColor: C.bg, minHeight: altoPant - ins.top - 60, transform: [{ translateY: tramo(0.35, 0.95, altoPant * 0.45, 0) }] }]}>
+        <Animated.View style={[st.hoja, { backgroundColor: C.bg, minHeight: altoPant - ins.top - 60, transform: [{ translateY: tramo(0.1, 1, 70, 0) }] }]}>
           <View style={[st.agarre, { backgroundColor: C.ln }]} />
           <Gastos g={snap.gastos} C={C} f={f} onJs={onJs} pausa={pausa} />
 

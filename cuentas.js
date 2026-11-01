@@ -179,11 +179,22 @@ export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, 
       onPanResponderTerminate: () => ir(Math.round(posV.current)),
     });
   }, [CW, P]);
-  // Al abrir: las tarjetas entran desde la derecha, una tras otra
+  // Al abrir (como el video): la tarjeta sale pequeña y acostada desde el Inicio,
+  // se endereza mientras crece con un rebote; lo demás aparece suave y las vecinas al final.
+  const [vez, setVez] = useState(0);
+  const fondo = useRef(new Animated.Value(0)).current;
+  const vecinas = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (!visible) return;
+    setVez((v) => v + 1);
     abre.setValue(0);
-    Animated.spring(abre, { toValue: 1, useNativeDriver: true, speed: 7, bounciness: 7, delay: 60 }).start();
+    fondo.setValue(0);
+    vecinas.setValue(0);
+    Animated.parallel([
+      Animated.timing(fondo, { toValue: 1, duration: 260, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      Animated.spring(abre, { toValue: 1, useNativeDriver: true, stiffness: 170, damping: 16, mass: 1 }),
+      Animated.timing(vecinas, { toValue: 1, duration: 420, delay: 380, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+    ]).start();
   }, [visible]);
 
   // Ir a la cuenta pedida (al abrir o después de agregar una)
@@ -210,10 +221,12 @@ export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, 
     const d = i - idx;
     const ad = Math.abs(d);
     // Entrada: la tarjeta del centro llega volando inclinada desde abajo; las vecinas aparecen después
-    const subeY = abre.interpolate({ inputRange: [0, 1], outputRange: [HP * 0.55 + ad * 60, 0] });
-    const ladea = abre.interpolate({ inputRange: [0, 1], outputRange: [`${-26 + d * 8}deg`, '0deg'] });
-    const crece = abre.interpolate({ inputRange: [0, 1], outputRange: [0.78, 1] });
-    const aparece = ad === 0 ? 1 : abre.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0, 0, 1], extrapolate: 'clamp' });
+    // La del centro: empieza a la izquierda y un poco arriba, pequeña y casi acostada (-70°)
+    const subeY = ad === 0 ? abre.interpolate({ inputRange: [0, 1], outputRange: [-CH * 0.1, 0] }) : 0;
+    const entraX = ad === 0 ? abre.interpolate({ inputRange: [0, 1], outputRange: [-W * 0.16, 0] }) : vecinas.interpolate({ inputRange: [0, 1], outputRange: [d * W * 0.35, 0] });
+    const ladea = ad === 0 ? abre.interpolate({ inputRange: [0, 1], outputRange: ['-72deg', '0deg'] }) : '0deg';
+    const crece = ad === 0 ? abre.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) : 1;
+    const aparece = ad === 0 ? fondo.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0, 1, 1] }) : vecinas;
     return (
       <Animated.View
         key={item.add ? 'add' : String(item.i != null ? item.i : i)}
@@ -221,7 +234,7 @@ export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, 
           st.carta,
           { width: CW, height: CH, left: (W - CW) / 2, zIndex: 100 - ad, elevation: 100 - ad, opacity: aparece },
           {
-            transform: [{ translateY: subeY }, { rotate: ladea }, { scale: crece }, { perspective: 900 }, { translateX: mx }, { rotateY: giro }, { scale: esc }],
+            transform: [{ translateX: entraX }, { translateY: subeY }, { rotate: ladea }, { scale: crece }, { perspective: 900 }, { translateX: mx }, { rotateY: giro }, { scale: esc }],
           },
         ]}
       >
@@ -259,8 +272,8 @@ export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, 
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: C.bg }}>
+    <Modal visible={visible} animationType="none" transparent statusBarTranslucent onRequestClose={onClose}>
+      <Animated.View style={{ flex: 1, backgroundColor: C.bg, opacity: fondo }}>
         <LinearGradient
           colors={[alfa(color, C.dark ? 0.55 : 0.35), alfa(color, C.dark ? 0.22 : 0.14), alfa(color, 0)]}
           locations={[0, 0.55, 1]}
@@ -306,6 +319,9 @@ export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, 
               <View style={{ alignItems: 'center', marginTop: 18 }}>
                 <Text style={{ color: C.mut, fontSize: 14 }}>{credito ? T.usado : T.saldo}</Text>
                 <Monto
+                  key={'m' + vez}
+                  desde0={idx === ((data && data.at) || 0) ? 'cu' + vez : undefined}
+                  dur={1100}
                   v={credito ? it.usado : it.saldo}
                   style={{ color: !credito && it.neg ? C.neg : C.ink, fontSize: 40, fontWeight: '700', letterSpacing: -0.8, marginTop: 2, fontVariant: ['tabular-nums'] }}
                   numberOfLines={1}
@@ -402,7 +418,7 @@ export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, 
             </View>
           )}
         </ScrollView>
-      </View>
+      </Animated.View>
     </Modal>
   );
 }

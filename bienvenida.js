@@ -3,7 +3,7 @@
 // pantalla en diagonal. 3) Sube el mensaje y aparecen los botones.
 // Los botones tocan los de la web (Crear cuenta / Entrar), así todo sigue igual.
 import { useEffect, useRef } from 'react';
-import { Animated, Easing, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, Easing, StyleSheet, Text, View, useColorScheme, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Toque } from './inicio';
@@ -138,62 +138,35 @@ const st = StyleSheet.create({
   btn: { alignItems: 'center', justifyContent: 'center', paddingVertical: 16, borderRadius: 18 },
 });
 
-// Intro corta cada vez que abres la app (con sesión iniciada): las piezas se juntan,
-// aparece el ícono, un degradado barre la pantalla y todo se desvanece hacia el Inicio.
-export function Intro({ onFin, dark }) {
-  const { width: W, height: H } = useWindowDimensions();
-  const piezas = useRef(new Animated.Value(0)).current;
-  const icono = useRef(new Animated.Value(0)).current;
-  const barrido = useRef(new Animated.Value(0)).current;
-  const salida = useRef(new Animated.Value(1)).current;
+// Intro al abrir la app (con sesión iniciada). Empieza idéntica a la pantalla de carga del
+// iPhone (ícono de 120 px en el centro, mismo fondo), así no hay salto. El ícono "respira",
+// se acerca y todo se desvanece dejando ver el Inicio. Todo corre en el hilo nativo.
+export function Intro({ onFin }) {
+  const dark = useColorScheme() === 'dark'; // igual que la pantalla de carga del iPhone
+  const esc = useRef(new Animated.Value(1)).current;
+  const op = useRef(new Animated.Value(1)).current;
   const fin = useRef(false);
   const terminar = () => {
     if (fin.current) return;
     fin.current = true;
-    Animated.timing(salida, { toValue: 0, duration: 320, useNativeDriver: true }).start(() => onFin && onFin());
+    onFin && onFin();
   };
   useEffect(() => {
     Animated.sequence([
-      Animated.delay(80),
-      Animated.timing(piezas, { toValue: 1, duration: 620, easing: Easing.out(Easing.back(1.3)), useNativeDriver: true }),
-      Animated.spring(icono, { toValue: 1, useNativeDriver: true, speed: 16, bounciness: 10 }),
-      Animated.timing(barrido, { toValue: 1, duration: 520, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+      Animated.delay(120),
+      Animated.timing(esc, { toValue: 0.88, duration: 170, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      Animated.parallel([
+        Animated.timing(esc, { toValue: 2.6, duration: 420, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(op, { toValue: 0, duration: 300, delay: 120, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+      ]),
     ]).start(terminar);
-    const t = setTimeout(terminar, 3500);
+    const t = setTimeout(terminar, 2500);
     return () => clearTimeout(t);
   }, []);
-  const Z = 104;
-  const diag = Math.sqrt(W * W + H * H);
-  const mov = (sx, sy, r) => ({
-    transform: [
-      { translateX: piezas.interpolate({ inputRange: [0, 1], outputRange: [sx * W * 0.5, 0] }) },
-      { translateY: piezas.interpolate({ inputRange: [0, 1], outputRange: [sy * H * 0.28, 0] }) },
-      { rotate: piezas.interpolate({ inputRange: [0, 1], outputRange: [r, '0deg'] }) },
-    ],
-  });
-  const fuera = icono.interpolate({ inputRange: [0, 0.6], outputRange: [1, 0], extrapolate: 'clamp' });
+  const Z = 120;
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, { opacity: salida }]} onTouchStart={terminar}>
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: dark ? '#000000' : '#F2F2F7' }]} />
-      <Animated.View
-        style={{
-          position: 'absolute',
-          width: diag * 1.2,
-          height: diag * 1.2,
-          left: (W - diag * 1.2) / 2,
-          top: (H - diag * 1.2) / 2,
-          transform: [{ rotate: '-35deg' }, { translateY: barrido.interpolate({ inputRange: [0, 1], outputRange: [diag * 1.25, 0] }) }],
-        }}
-      >
-        <LinearGradient colors={['#2B8CFF', '#3B3FB6', '#0A0E1F', '#05060C']} locations={[0, 0.25, 0.6, 1]} style={StyleSheet.absoluteFill} />
-      </Animated.View>
-      <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]} pointerEvents="none">
-        <View style={{ width: Z, height: Z }}>
-          <Animated.View style={[st.pieza, { width: Z / 2, height: Z, borderTopLeftRadius: Z * 0.24, borderBottomLeftRadius: Z * 0.24, left: 0, opacity: fuera }, mov(-1, -1, '-35deg')]} />
-          <Animated.View style={[st.pieza, { width: Z / 2, height: Z, borderTopRightRadius: Z * 0.24, borderBottomRightRadius: Z * 0.24, left: Z / 2, backgroundColor: '#0047D6', opacity: fuera }, mov(1, 1, '35deg')]} />
-          <Animated.Image source={ICONO} style={{ width: Z, height: Z, borderRadius: Z * 0.24, opacity: icono, transform: [{ scale: icono.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }) }] }} />
-        </View>
-      </View>
+    <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: op, backgroundColor: dark ? '#000000' : '#F2F2F7', alignItems: 'center', justifyContent: 'center' }]}>
+      <Animated.Image source={ICONO} style={{ width: Z, height: Z, borderRadius: Z * 0.225, transform: [{ scale: esc }] }} />
     </Animated.View>
   );
 }
