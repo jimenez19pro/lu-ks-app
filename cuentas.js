@@ -2,7 +2,7 @@
 // Deslizas tus cuentas de lado; el saldo de cada una cambia con animación y
 // abajo se ve su información y sus movimientos. Al final: "Agregar cuenta".
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Modal, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, Easing, Modal, PanResponder, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Barra, CHEV, Circulo, Ico, Monto, PLUS, Tarjeta, Tile, Toque, alfa, css, mezcla, rgba, tema } from './inicio';
@@ -96,19 +96,72 @@ export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, 
   const items = D.items || [];
   const CW = Math.min(Math.round(W * 0.64), 300);
   const CH = Math.round(CW * 1.42);
-  const GAP = 14;
-  const paso = CW + GAP;
-  const [idx, setIdx] = useState(0);
-  const x = useRef(new Animated.Value(0)).current;
-  const lista = useRef(null);
   const pags = useMemo(() => [...items, { add: 1 }], [items]);
+  const pos = useRef(new Animated.Value(0)).current; // 0 = primera tarjeta, 1 = segunda…
+  const posV = useRef(0);
+  const [idx, setIdx] = useState(0);
+  const idxRef = useRef(0);
+  const abre = useRef(new Animated.Value(0)).current;
+  const nRef = useRef(pags.length);
+  nRef.current = pags.length;
+  // El saldo cambia mientras deslizas (no al soltar)
+  useEffect(() => {
+    const id = pos.addListener(({ value }) => {
+      posV.current = value;
+      const i = Math.max(0, Math.min(nRef.current - 1, Math.round(value)));
+      if (i !== idxRef.current) {
+        idxRef.current = i;
+        setIdx(i);
+      }
+    });
+    return () => pos.removeListener(id);
+  }, []);
+  const ir = (i, rapido) => {
+    const k = Math.max(0, Math.min(nRef.current - 1, i));
+    Animated.spring(pos, { toValue: k, useNativeDriver: true, speed: rapido ? 20 : 13, bounciness: 6 }).start();
+  };
+  // Deslizar con el dedo: el mazo sigue al dedo y al soltar se acomoda en la tarjeta más cercana
+  const pan = useMemo(() => {
+    let inicio = 0;
+    return PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 8 && Math.abs(g.dx) > Math.abs(g.dy) * 1.2,
+      onMoveShouldSetPanResponderCapture: (_, g) => Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: () => {
+        pos.stopAnimation((v) => {
+          inicio = v;
+          posV.current = v;
+        });
+      },
+      onPanResponderMove: (_, g) => {
+        let v = inicio - g.dx / (CW * 0.62);
+        const max = nRef.current - 1;
+        if (v < 0) v = v * 0.3; // resistencia en los bordes
+        if (v > max) v = max + (v - max) * 0.3;
+        pos.setValue(v);
+      },
+      onPanResponderRelease: (_, g) => {
+        const v = posV.current - g.vx * 0.35;
+        ir(Math.round(v));
+      },
+      onPanResponderTerminate: () => ir(Math.round(posV.current)),
+    });
+  }, [CW]);
+  // Al abrir: las tarjetas entran desde la derecha, una tras otra
+  useEffect(() => {
+    if (!visible) return;
+    abre.setValue(0);
+    Animated.timing(abre, { toValue: 1, duration: 900, easing: Easing.out(Easing.back(1.1)), useNativeDriver: true }).start();
+  }, [visible]);
 
   // Ir a la cuenta pedida (al abrir o después de agregar una)
   useEffect(() => {
     if (!visible || !data) return;
     const i = Math.max(0, Math.min(data.at || 0, pags.length - 1));
+    pos.setValue(i);
+    posV.current = i;
+    idxRef.current = i;
     setIdx(i);
-    setTimeout(() => lista.current && lista.current.scrollToOffset({ offset: i * paso, animated: false }), 30);
   }, [visible, data && data.at, data && data.items && data.items.length]);
 
   const it = items[idx];
@@ -116,15 +169,25 @@ export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, 
   const credito = it && it.tipo === 'credito';
 
   const pagina = (item, i) => {
-    const r = [(i - 1) * paso, i * paso, (i + 1) * paso];
-    const esc = x.interpolate({ inputRange: r, outputRange: [0.88, 1, 0.88], extrapolate: 'clamp' });
-    const op = x.interpolate({ inputRange: r, outputRange: [0.55, 1, 0.55], extrapolate: 'clamp' });
-    const giro = x.interpolate({ inputRange: r, outputRange: ['6deg', '0deg', '-6deg'], extrapolate: 'clamp' });
+    const r = [i - 2, i - 1, i, i + 1, i + 2];
+    const mx = pos.interpolate({ inputRange: r, outputRange: [CW * 0.8, CW * 0.55, 0, -CW * 0.55, -CW * 0.8], extrapolate: 'clamp' });
+    const esc = pos.interpolate({ inputRange: r, outputRange: [0.72, 0.85, 1, 0.85, 0.72], extrapolate: 'clamp' });
+    const sombra = pos.interpolate({ inputRange: r, outputRange: [0.5, 0.3, 0, 0.3, 0.5], extrapolate: 'clamp' });
+    const giro = pos.interpolate({ inputRange: r, outputRange: ['-16deg', '-10deg', '0deg', '10deg', '16deg'], extrapolate: 'clamp' });
+    const d = Math.abs(i - idx);
+    const entra = abre.interpolate({ inputRange: [0, 1], outputRange: [W * (0.9 + d * 0.35), 0] });
     return (
-      <Animated.View style={{ width: CW, marginRight: GAP, opacity: op, transform: [{ perspective: 900 }, { scale: esc }, { rotateY: giro }] }}>
+      <Animated.View
+        key={item.add ? 'add' : String(item.i != null ? item.i : i)}
+        style={[
+          st.carta,
+          { width: CW, height: CH, left: (W - CW) / 2, zIndex: 100 - d, elevation: 100 - d },
+          { transform: [{ translateX: entra }, { perspective: 1000 }, { translateX: mx }, { scale: esc }, { rotateY: giro }] },
+        ]}
+      >
         {item.add ? (
           <Toque onPress={onAdd} label={T.add}>
-            <View style={[st.nueva, { width: CW, height: CH, borderColor: alfa(C.ink, 0.22), backgroundColor: alfa(C.sf, 0.6) }]}>
+            <View style={[st.nueva, { width: CW, height: CH, borderColor: alfa(C.ink, 0.22), backgroundColor: C.sf }]}>
               <View style={[st.mas, { backgroundColor: C.ink }]}>
                 <Ico xml={PLUS} size={26} color={C.bg} />
               </View>
@@ -133,7 +196,8 @@ export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, 
             </View>
           </Toque>
         ) : (
-          <Toque onPress={() => i !== idx && lista.current && lista.current.scrollToOffset({ offset: i * paso, animated: true })} label={item.n}>
+          <Toque onPress={() => i !== idx && ir(i, true)} label={item.n}>
+            <View>
             <Plastico
               w={CW}
               h={CH}
@@ -145,6 +209,8 @@ export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, 
               red={item.red}
               tipoN={item.tipoN}
             />
+            <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: Math.round(CW * 0.11), backgroundColor: '#000', opacity: sombra }]} />
+            </View>
           </Toque>
         )}
       </Animated.View>
@@ -154,7 +220,8 @@ export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: C.bg }}>
-        <LinearGradient colors={[alfa(color, C.dark ? 0.5 : 0.32), alfa(color, 0)]} style={[st.fondo, { height: CH + ins.top + 160 }]} />
+        <LinearGradient colors={[alfa(color, C.dark ? 0.45 : 0.22), alfa(color, 0)]} style={[st.fondo, { height: CH + ins.top + 160 }]} />
+        <View style={[st.diag, { backgroundColor: alfa(color, C.dark ? 0.55 : 0.4), width: W * 1.3, top: ins.top + CH * 0.18, left: W * 0.35 }]} />
         <ScrollView contentContainerStyle={{ paddingTop: ins.top + 6, paddingBottom: ins.bottom + 30 }} showsVerticalScrollIndicator={false}>
           {/* Encabezado */}
           <View style={[st.fila, { justifyContent: 'space-between', paddingHorizontal: 16 }]}>
@@ -174,26 +241,16 @@ export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, 
           </View>
 
           {/* Carrusel */}
-          <Animated.FlatList
-            ref={lista}
-            data={pags}
-            keyExtractor={(p, i) => (p.add ? 'add' : String(p.i != null ? p.i : i))}
-            renderItem={({ item, index }) => pagina(item, index)}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            snapToInterval={paso}
-            decelerationRate="fast"
-            contentContainerStyle={{ paddingHorizontal: (W - CW) / 2, paddingVertical: 22 }}
-            onScroll={Animated.event([{ nativeEvent: { contentOffset: { x } } }], { useNativeDriver: true })}
-            scrollEventThrottle={16}
-            onMomentumScrollEnd={(e) => setIdx(Math.max(0, Math.min(pags.length - 1, Math.round(e.nativeEvent.contentOffset.x / paso))))}
-            getItemLayout={(_, i) => ({ length: paso, offset: paso * i, index: i })}
-          />
+          <View style={{ height: CH + 44, marginTop: 10 }} {...pan.panHandlers}>
+            <View style={{ position: 'absolute', left: 0, right: 0, top: 22, height: CH }}>{pags.map((p, i) => pagina(p, i))}</View>
+          </View>
 
           {/* Puntos */}
           <View style={[st.fila, { justifyContent: 'center', gap: 6 }]}>
             {pags.map((p, i) => (
-              <View key={i} style={{ width: i === idx ? 18 : 6, height: 6, borderRadius: 3, backgroundColor: i === idx ? C.ink : alfa(C.ink, 0.22) }} />
+              <Toque key={i} onPress={() => ir(i, true)} hitSlop={6}>
+                <View style={{ width: i === idx ? 18 : 6, height: 6, borderRadius: 3, backgroundColor: i === idx ? C.ink : alfa(C.ink, 0.22) }} />
+              </Toque>
             ))}
           </View>
 
@@ -305,6 +362,8 @@ export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, 
 const st = StyleSheet.create({
   fila: { flexDirection: 'row', alignItems: 'center' },
   fondo: { position: 'absolute', left: 0, right: 0, top: 0 },
+  carta: { position: 'absolute', top: 0 },
+  diag: { position: 'absolute', height: 260, borderRadius: 60, transform: [{ rotate: '-28deg' }] },
   circ: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   nueva: { borderRadius: 30, borderWidth: 2, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
   mas: { width: 54, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center' },

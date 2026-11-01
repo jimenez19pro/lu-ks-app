@@ -16,7 +16,8 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
   // Se esconde el botón (y la rayita "o" de encima): Apple rechaza botones de inicio de sesión que no funcionan.
   (function () {
     var st = document.createElement('style');
-    st.textContent = '[data-au="google"]{display:none!important}div:has(+ [data-au="google"]){display:none!important}';
+    // También la barra de abajo de la web: la app dibuja la suya (si no, se ve la vieja un instante al cambiar de pestaña).
+    st.textContent = '[data-au="google"]{display:none!important}div:has(+ [data-au="google"]){display:none!important}' + ${formNativo ? `'body > nav{visibility:hidden!important}'` : `''`};
     var pon = function () { (document.head || document.documentElement).appendChild(st); };
     if (document.documentElement) pon(); else document.addEventListener('DOMContentLoaded', pon);
   })();

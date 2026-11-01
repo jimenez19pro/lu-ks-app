@@ -4,6 +4,7 @@
 // en el celular (copia.js) y recordatorios en el celular (recordatorios.js).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Animated,
   AppState,
@@ -22,15 +23,16 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as Sharing from 'expo-sharing';
 import { File, Paths } from 'expo-file-system';
 import { WebView } from 'react-native-webview';
+import * as Clipboard from 'expo-clipboard';
 
-import Inicio from './inicio';
+import Inicio, { BarraAbajo, tema } from './inicio';
 import Movimientos from './movimientos';
 import Formulario from './formulario';
 import Reportes, { HojaEspejo } from './reportes';
 import { Cuenta, Detalle, Menu } from './hojas';
 import Cuentas from './cuentas';
 import NuevaCuenta from './nuevacuenta';
-import Bienvenida from './bienvenida';
+import Bienvenida, { Intro } from './bienvenida';
 import { elegir } from './selector';
 import { puente } from './puente';
 import { BASE, actualizar, copiaGuardada, marcarMala } from './copia';
@@ -136,6 +138,14 @@ export default function App() {
   const [accVis, setAccVis] = useState(false);
   const [accRes, setAccRes] = useState(null);
   const [land, setLand] = useState(null);
+  const [intro, setIntro] = useState(!!inicial.snap);
+  useEffect(() => {
+    const t = setTimeout(() => setIntro(false), 4500); // por si acaso
+    return () => clearTimeout(t);
+  }, []);
+  const [navPend, setNavPend] = useState(null);
+  const navPendRef = useRef(null);
+  const navPendT = useRef(null);
   const [editar, setEditar] = useState(null);
   const [kind, setKind] = useState('home');
   const [show, setShow] = useState(!!inicial.snap);
@@ -309,6 +319,7 @@ export default function App() {
           }
         }
         setLand(m.land || null);
+        if (m.land) setIntro(false);
         if (m.out) {
           settled.current = true;
           setShow(false);
@@ -337,6 +348,13 @@ export default function App() {
         if (m.snap || (m.tab && m.tab !== 'home')) settled.current = true;
         if (!settled.current && !m.show) return; // todavía cargando: dejar el Inicio guardado
         clearTimeout(showT.current);
+        // Cambiando de pestaña: seguir con lo nativo hasta que llegue la pantalla nueva
+        if (navPendRef.current) {
+          if (!(m.show && m.kind === navPendRef.current)) return;
+          navPendRef.current = null;
+          clearTimeout(navPendT.current);
+          setNavPend(null);
+        }
         const aplicar = () => {
           if (m.show && m.kind) setKind(m.kind);
           setShow(!!m.show);
@@ -398,6 +416,12 @@ export default function App() {
           'Google no está disponible aquí',
           'Dentro de la app entra con tu correo y contraseña.\n\nSi tu cuenta es de Google, toca "¿Olvidaste tu contraseña?" y escribe tu Gmail: te llega un enlace para crear una contraseña. Tus datos siguen iguales.'
         );
+      } else if (m.t === 'copy') {
+        Clipboard.setStringAsync(String(m.s || '')).then(() => {
+          clearTimeout(avisoT.current);
+          setAviso(m.msg || 'Copiado');
+          avisoT.current = setTimeout(() => setAviso(null), 2200);
+        });
       } else if (m.t === 'file') {
         saveAndShare(m);
       } else if (m.t === 'fileErr') {
@@ -432,6 +456,20 @@ export default function App() {
         setKind(k);
         setShow(true);
         js(`window.__lkTap&&window.__lkTap(${JSON.stringify(`nav .tab[data-t="${k}"]`)})`);
+        return;
+      }
+      if (k === 'home' || k === 'tx' || k === 'rep' || k === 'con') {
+        // Primera vez en esa pestaña: no mostrar la web; esperar su pantalla nativa
+        clearTimeout(navPendT.current);
+        navPendRef.current = k;
+        setNavPend(k);
+        js(`window.__lkTap&&window.__lkTap(${JSON.stringify(`nav .tab[data-t="${k}"]`)})`);
+        navPendT.current = setTimeout(() => {
+          if (!navPendRef.current) return;
+          navPendRef.current = null;
+          setNavPend(null);
+          js('window.__lkState&&window.__lkState()');
+        }, 2500);
         return;
       }
       onTap(`nav .tab[data-t="${k}"]`);
@@ -663,9 +701,16 @@ export default function App() {
                 onCuentas={onCuentas}
                 onTransfer={onTransfer}
                 onJs={onJs}
+                listo={!intro}
               />
             )}
           </Animated.View>
+        ) : null}
+        {navPend && !failed && snap ? (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: tema(snap.th).bg, alignItems: 'center', justifyContent: 'center' }]}>
+            <ActivityIndicator color={tema(snap.th).mut} />
+            <BarraAbajo snap={snap} C={tema(snap.th)} activo={navPend} onNav={onNav} onAdd={abrirForm} />
+          </View>
         ) : null}
         {aviso && (show || formVis) ? (
           <View pointerEvents="none" style={s.avisoW}>
@@ -674,6 +719,7 @@ export default function App() {
             </View>
           </View>
         ) : null}
+        {intro && !land ? <Intro dark={!!(snap && snap.th && snap.th.dark)} onFin={() => setIntro(false)} /> : null}
         <HojaEspejo
           h={hoja}
           visible={!!hoja && !formVis && !det && !cuenta && !menu && !cuentasVis && !accVis}

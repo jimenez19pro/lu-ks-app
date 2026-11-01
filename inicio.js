@@ -104,7 +104,7 @@ function armar(p, n) {
 }
 const yaContado = {};
 // Muestra un monto ("$1.812.000") y lo anima cuando cambia. Con "desde0" la primera vez sube desde $0.
-export function Monto({ v, style, desde0, dur = 700, ...p }) {
+export function Monto({ v, style, desde0, dur = 700, pausa, ...p }) {
   const [txt, setTxt] = useState(() => {
     const b = partes(v);
     return desde0 && b && !yaContado[desde0] ? armar(b, 0) : v;
@@ -112,6 +112,7 @@ export function Monto({ v, style, desde0, dur = 700, ...p }) {
   const prev = useRef(desde0 && !yaContado[desde0] ? null : v);
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
+    if (pausa) return undefined;
     const b = partes(v);
     const a = prev.current == null ? (b ? { ...b, n: 0 } : null) : partes(prev.current);
     prev.current = v;
@@ -130,7 +131,7 @@ export function Monto({ v, style, desde0, dur = 700, ...p }) {
       anim.removeListener(id);
       anim.stopAnimation();
     };
-  }, [v]);
+  }, [v, pausa]);
   return (
     <Text style={style} {...p}>
       {txt}
@@ -144,12 +145,15 @@ const Q_ACC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke
 const Q_MAS = '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="18.5" cy="12" r="1.9"/></svg>';
 
 // Barra de gastos por categoría (como "Transactions" del ejemplo): una sola barra partida por colores
-function Gastos({ g, C, f, onJs }) {
+function Gastos({ g, C, f, onJs, pausa }) {
   const crece = useRef(new Animated.Value(0)).current;
+  const primera = useRef(true);
   useEffect(() => {
+    if (pausa) return;
     crece.setValue(0);
-    Animated.timing(crece, { toValue: 1, duration: 800, delay: 150, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-  }, [g && g.n]);
+    Animated.timing(crece, { toValue: 1, duration: 900, delay: primera.current ? 750 : 150, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    primera.current = false;
+  }, [g && g.n, pausa]);
   if (!g) return null;
   const its = g.items || [];
   const top = its.slice(0, 6);
@@ -307,8 +311,9 @@ export function Fila({ C, f, ico, t, s, right, onPress, last, pend }) {
 
 /* ---------- Pantalla ---------- */
 const OSCURO = '#0A0E1F';
+let entradaHecha = false;
 const blanco = (a) => `rgba(255,255,255,${a})`;
-function Inicio({ snap, onTap, onKeep, onRefresh, onNav, onAdd, onCuenta, onCuentas, onTransfer, onJs, viejo }) {
+function Inicio({ snap, onTap, onKeep, onRefresh, onNav, onAdd, onCuenta, onCuentas, onTransfer, onJs, viejo, listo = true }) {
   const ins = useSafeAreaInsets();
   const { height: altoPant } = useWindowDimensions();
   const C = tema(snap && snap.th);
@@ -316,6 +321,16 @@ function Inicio({ snap, onTap, onKeep, onRefresh, onNav, onAdd, onCuenta, onCuen
   const [cargando, setCargando] = useState(false);
   const [altoHd, setAltoHd] = useState(420);
   const y = useRef(new Animated.Value(0)).current;
+  // Entrada (una vez por apertura): aparece el encabezado, cuenta el saldo, saltan los botones y sube la hoja
+  const ent = useRef(new Animated.Value(entradaHecha ? 1 : 0)).current;
+  const [pausa, setPausa] = useState(!entradaHecha);
+  useEffect(() => {
+    if (!listo || entradaHecha || !snap) return;
+    entradaHecha = true;
+    setPausa(false);
+    Animated.timing(ent, { toValue: 1, duration: 1250, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, [listo, !!snap]);
+  const tramo = (a, b, de, a2) => ent.interpolate({ inputRange: [a, b], outputRange: [de, a2], extrapolate: 'clamp' });
   const tap = useCallback((sel) => sel && onTap(sel), [onTap]);
   const keep = useCallback((sel) => sel && onKeep(sel), [onKeep]);
   if (!snap) return null;
@@ -356,7 +371,7 @@ function Inicio({ snap, onTap, onKeep, onRefresh, onNav, onAdd, onCuenta, onCuen
         >
           {/* Encabezado */}
           {hd ? (
-            <View style={[st.row, { gap: 12 }]}>
+            <Animated.View style={[st.row, { gap: 12, opacity: tramo(0, 0.25, 0, 1), transform: [{ translateY: tramo(0, 0.3, -14, 0) }] }]}>
               <Toque onPress={() => tap('#app .hd [data-go="con"]')} label="Ajustes">
                 <View style={[st.av, { backgroundColor: blanco(0.16) }]}>
                   <Text style={{ color: '#FFFFFF', fontSize: f(18), fontWeight: '800' }}>{hd.av}</Text>
@@ -380,7 +395,7 @@ function Inicio({ snap, onTap, onKeep, onRefresh, onNav, onAdd, onCuenta, onCuen
                   <Ico xml={hd.grid || GRID} size={22} color="#FFFFFF" />
                 </View>
               </Toque>
-            </View>
+            </Animated.View>
           ) : null}
 
           {/* Frase del día */}
@@ -435,7 +450,7 @@ function Inicio({ snap, onTap, onKeep, onRefresh, onNav, onAdd, onCuenta, onCuen
 
           {/* Saldo grande */}
           {hero ? (
-            <View style={{ marginTop: 22 }}>
+            <Animated.View style={{ marginTop: 22, opacity: tramo(0.1, 0.35, 0, 1), transform: [{ translateY: tramo(0.1, 0.4, 16, 0) }] }}>
               <View style={[st.row, { gap: 10 }]}>
                 <Text style={{ color: blanco(0.75), fontSize: f(15), fontWeight: '500' }}>{hero.lb}</Text>
                 <Toque onPress={() => keep('#app [data-eye]')} hitSlop={10} label="Mostrar u ocultar montos">
@@ -445,22 +460,30 @@ function Inicio({ snap, onTap, onKeep, onRefresh, onNav, onAdd, onCuenta, onCuen
               <Monto
                 v={hero.v}
                 desde0="hero"
+                pausa={pausa}
+                dur={1100}
                 style={{ color: hero.neg ? '#FF8A80' : '#FFFFFF', fontSize: f(46), fontWeight: '700', letterSpacing: -1, marginTop: 2, fontVariant: ['tabular-nums'] }}
                 adjustsFontSizeToFit
                 numberOfLines={1}
               />
               <Barra bar={hero.bar} C={C} track={blanco(0.18)} blanco alto={6} />
               {hero.sub ? <Text style={{ color: blanco(0.72), fontSize: f(13), marginTop: 8, lineHeight: f(18) }}>{hero.sub}</Text> : null}
-            </View>
+            </Animated.View>
           ) : null}
 
           {/* Botones rápidos */}
           <View style={[st.row, { justifyContent: 'space-between', marginTop: 22 }]}>
-            {rapidos.map((b) => (
+            {rapidos.map((b, i) => (
               <Toque key={b.k} onPress={b.fn} style={st.rap} label={b.t}>
-                <View style={[st.rapI, { backgroundColor: blanco(0.12), borderColor: blanco(0.14) }]}>
+                <Animated.View
+                  style={[
+                    st.rapI,
+                    { backgroundColor: blanco(0.12), borderColor: blanco(0.14) },
+                    { opacity: tramo(0.3 + i * 0.07, 0.45 + i * 0.07, 0, 1), transform: [{ scale: ent.interpolate({ inputRange: [0.3 + i * 0.07, 0.48 + i * 0.07, 0.56 + i * 0.07], outputRange: [0.4, 1.12, 1], extrapolate: 'clamp' }) }] },
+                  ]}
+                >
                   <Ico xml={b.svg} size={24} color="#FFFFFF" />
-                </View>
+                </Animated.View>
                 <Text style={{ color: blanco(0.85), fontSize: f(12), fontWeight: '600', marginTop: 6 }} numberOfLines={1}>
                   {b.t}
                 </Text>
@@ -470,9 +493,9 @@ function Inicio({ snap, onTap, onKeep, onRefresh, onNav, onAdd, onCuenta, onCuen
         </Animated.View>
 
         {/* Hoja clara que sube sobre el encabezado */}
-        <View style={[st.hoja, { backgroundColor: C.bg, minHeight: altoPant - ins.top - 60 }]}>
+        <Animated.View style={[st.hoja, { backgroundColor: C.bg, minHeight: altoPant - ins.top - 60, transform: [{ translateY: tramo(0.35, 0.95, altoPant * 0.45, 0) }] }]}>
           <View style={[st.agarre, { backgroundColor: C.ln }]} />
-          <Gastos g={snap.gastos} C={C} f={f} onJs={onJs} />
+          <Gastos g={snap.gastos} C={C} f={f} onJs={onJs} pausa={pausa} />
 
         {/* General */}
         <Seccion s={gen} C={C} f={f} onTap={tap} keep={keep} />
@@ -723,7 +746,7 @@ function Inicio({ snap, onTap, onKeep, onRefresh, onNav, onAdd, onCuenta, onCuen
             ) : null}
           </>
         ) : null}
-        </View>
+        </Animated.View>
       </Animated.ScrollView>
 
       {/* Barra compacta arriba al bajar */}
