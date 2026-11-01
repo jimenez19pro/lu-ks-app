@@ -994,7 +994,7 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
       });
       var o = { t: 'cuenta', i: +i, n: n, tile: tileH(accIco(a, 56)), tipo: a.tipo, red: a.red || '', lang: window.LKLANG || 'es', th: theme(), hide: !!window.HIDE,
         mes: TRf(new Date().toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })), entra: mm(entra), sale: mm(sale), total: lst.length,
-        color: a.color || (window.PAL ? PAL[(+i) % PAL.length] : ''), banco: a.banco || '', apodo: a.apodo || '', corte: a.corte ? +a.corte : 0, pri: !!a.pri,
+        portada: window.LKPORT ? LKPORT.get(n) : '', portadaC: window.LKPORT && LKPORT.color ? LKPORT.color(n) : '', color: a.color || (window.PAL ? PAL[(+i) % PAL.length] : ''), banco: a.banco || '', apodo: a.apodo || '', corte: a.corte ? +a.corte : 0, pri: !!a.pri,
         tipoN: a.tipo === 'credito' ? Lx('Crédito', 'Credit') : a.tipo === 'efectivo' ? Lx('Efectivo', 'Cash') : Lx('Débito', 'Debit'),
         movs: lst.slice(0, nmax || 60).map(function (t) {
           var c = t.tipo === 'tr' ? null : (CATS[t.cat] || CATS.otro);
@@ -1019,7 +1019,7 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
     try {
       post({ t: 'cuentas', at: at == null ? 0 : +at, lang: window.LKLANG || 'es', th: theme(), hide: !!window.HIDE,
         items: ACC.map(function (a, j) { return cuentaData(j, 25); }),
-        T: { tit: Lx('Mis cuentas', 'My accounts'), add: Lx('Agregar cuenta', 'Add account'), addS: Lx('Débito, tarjeta de crédito o efectivo', 'Debit, credit card or cash'),
+        T: { tit: Lx('Mis cuentas', 'My accounts'), nueva: Lx('Nueva cuenta', 'New account'), add: Lx('Agregar cuenta', 'Add account'), addS: Lx('Débito, tarjeta de crédito o efectivo', 'Debit, credit card or cash'),
           saldo: Lx('Saldo', 'Balance'), usado: Lx('Usado', 'Used'), cupo: Lx('Cupo', 'Limit'), disp: Lx('Disponible', 'Available'), pago: Lx('Día de pago', 'Due day'), corte: Lx('Día de corte', 'Statement day'),
           info: Lx('Información', 'Details'), entra: Lx('Entró', 'In'), sale: Lx('Salió', 'Out'), movs: Lx('Movimientos', 'Transactions'), sin: Lx('Sin movimientos todavía', 'No transactions yet'),
           ver: Lx('Ver en Movimientos', 'View in Transactions'), editar: Lx('Editar cuenta', 'Edit account'), tipo: Lx('Tipo', 'Type'), banco: Lx('Banco', 'Bank'), pri: Lx('Cuenta principal', 'Main account') } });
@@ -1037,7 +1037,7 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
       corte: a.corte || '', pago: a.pago || '', rec: !!a.rec, pri: !!a.pri } : afNew();
     var hoy = '';
     if (a) { var bA = bal(a.n), h = a.tipo === 'credito' ? a.ini - bA : a.ini + bA; hoy = (h < 0 ? '−' : '') + m(Math.abs(h)); }
-    return { t: 'accform', i: a ? i : -1, f: f, hoy: hoy, clr: CLR, redes: ['Visa', 'Mastercard', 'Amex', 'Diners Club', 'Otra'],
+    return { t: 'accform', i: a ? i : -1, f: f, hoy: hoy, portada: a && window.LKPORT ? LKPORT.get(a.n) : '', T2: { portada: Lx('Portada de la tarjeta', 'Card cover'), elegir: Lx('Elegir foto', 'Choose photo'), quitar: Lx('Quitar', 'Remove'), ayudaP: Lx('Usa una captura de tu tarjeta en Wallet o una foto; podrás recortarla.', 'Use a screenshot of your card in Wallet or a photo; you can crop it.') }, clr: CLR, redes: ['Visa', 'Mastercard', 'Amex', 'Diners Club', 'Otra'],
       banks: BANKS.concat(['Otro banco']).map(function (n) { return { n: n, tile: tileH(bkTile(n, 40)) }; }), cash: tileH(accIco({ tipo: 'efectivo' }, 40)),
       lang: window.LKLANG || 'es', th: theme() };
   }
@@ -1050,11 +1050,20 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
       AE = d.i >= 0 ? +d.i : -1; ADEL = !!d.del; ultimoAviso = '';
       AF = { tipo: d.tipo, banco: d.tipo === 'efectivo' ? '' : (d.banco || ''), apodo: d.apodo || '', name: d.name || '', color: d.color || CLR[0], ini: d.ini == null ? '' : d.ini,
         cupo: d.cupo || '', red: d.red || '', corte: d.corte || '', pago: d.pago || '', rec: !!d.rec, pri: !!d.pri, act: d.act || '' };
-      var antes = JSON.stringify(ACC), n0 = ACC.length;
+      var antes = JSON.stringify(ACC), n0 = ACC.length, nViejo = AE >= 0 && ACC[AE] ? ACC[AE].n : '';
       var t0 = window.toast;
       if (typeof t0 === 'function') window.toast = function (x) { ultimoAviso = String(x || ''); return t0.apply(this, arguments); };
       try { saveAcc2(!!d.del); } finally { if (typeof t0 === 'function') window.toast = t0; }
-      var ok = JSON.stringify(ACC) !== antes;
+      // Si saveAcc2 rechazó (falta banco, nombre o cupo), avisa al instante con toast
+      var ok = !ultimoAviso && (JSON.stringify(ACC) !== antes || AE >= 0);
+      // Portada: se guarda aparte (Firebase), con el nombre final de la cuenta
+      if (ok && window.LKPORT && d.portada !== undefined && !d.del) {
+        var nNuevo = (ACC[AE >= 0 ? AE : ACC.length - 1] || {}).n;
+        if (nNuevo) {
+          if (nViejo && nViejo !== nNuevo) LKPORT.set(nViejo, '');
+          LKPORT.set(nNuevo, d.portada || '');
+        }
+      } else if (window.LKPORT && d.del && nViejo) LKPORT.set(nViejo, '');
       post({ t: 'accsaved', ok: ok, del: !!d.del, i: ok && !d.del ? (AE >= 0 ? AE : ACC.length > n0 ? ACC.length - 1 : -1) : -1,
         msg: ok ? '' : (ultimoAviso || Lx('No se pudo guardar. Intenta otra vez.', 'Could not save. Try again.')) });
     } catch (e) { post({ t: 'accsaved', ok: false, msg: String(e && e.message || e) }); }

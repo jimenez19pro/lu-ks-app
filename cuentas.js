@@ -2,7 +2,7 @@
 // Deslizas tus cuentas de lado; el saldo de cada una cambia con animación y
 // abajo se ve su información y sus movimientos. Al final: "Agregar cuenta".
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Modal, PanResponder, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, Easing, Image, Modal, PanResponder, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Barra, CHEV, Circulo, Ico, Monto, PLUS, Tarjeta, Tile, Toque, alfa, css, mezcla, rgba, tema } from './inicio';
@@ -31,11 +31,27 @@ export function RedLogo({ red, tinta, z = 1 }) {
 }
 export function colorCuenta(it) {
   if (!it) return '#4A63E7';
+  if (it.portada && it.portadaC) return it.portadaC;
   if (it.tipo === 'credito' && it.color) return it.color;
   if (it.tipo === 'efectivo') return '#C9A227';
   return (it.tile && css(it.tile.bg, null)) || it.color || '#4A63E7';
 }
-export function Plastico({ w, h, color, tile, titulo, sub, red, tipoN, abajo, vertical, chip = true }) {
+// Portada elegida por el usuario: llena la tarjeta (girada 90° si la tarjeta está de pie)
+export function Portada({ w, h, src, vertical }) {
+  const r = Math.round(Math.min(w, h) * 0.11);
+  return (
+    <View style={{ width: w, height: h, borderRadius: r, overflow: 'hidden', backgroundColor: '#111' }}>
+      {vertical ? (
+        <Image source={{ uri: src }} resizeMode="cover" style={{ position: 'absolute', width: h, height: w, left: (w - h) / 2, top: (h - w) / 2, transform: [{ rotate: '90deg' }] }} />
+      ) : (
+        <Image source={{ uri: src }} resizeMode="cover" style={StyleSheet.absoluteFill} />
+      )}
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: r, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.18)' }]} />
+    </View>
+  );
+}
+export function Plastico({ w, h, color, tile, titulo, sub, red, tipoN, abajo, vertical, chip = true, portada }) {
+  if (portada) return <Portada w={w} h={h} src={portada} vertical={vertical} />;
   const base = css(color, '#4A63E7');
   const tinta = claro(base) ? '#1C1C1E' : '#FFFFFF';
   const suave = claro(base) ? 'rgba(28,28,30,0.62)' : 'rgba(255,255,255,0.78)';
@@ -77,10 +93,17 @@ export function Plastico({ w, h, color, tile, titulo, sub, red, tipoN, abajo, ve
             {abajo}
           </Text>
         ) : null}
-        <View style={[st.fila, { justifyContent: 'space-between' }]}>
-          <Text style={{ color: suave, fontSize: 13, fontWeight: '600' }}>{tipoN}</Text>
-          <RedLogo red={red} tinta={tinta} />
-        </View>
+        {vertical ? (
+          <View style={[st.fila, { justifyContent: 'space-between' }]}>
+            {red ? <RedLogo red={red} tinta={tinta} /> : <View />}
+            <Text style={{ color: suave, fontSize: 13, fontWeight: '600' }}>{tipoN}</Text>
+          </View>
+        ) : (
+          <View style={[st.fila, { justifyContent: 'space-between' }]}>
+            <Text style={{ color: suave, fontSize: 13, fontWeight: '600' }}>{tipoN}</Text>
+            <RedLogo red={red} tinta={tinta} />
+          </View>
+        )}
       </View>
     </LinearGradient>
   );
@@ -89,16 +112,19 @@ export function Plastico({ w, h, color, tile, titulo, sub, red, tipoN, abajo, ve
 /* ---------- Pantalla ---------- */
 export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, onDet }) {
   const ins = useSafeAreaInsets();
-  const { width: W } = useWindowDimensions();
+  const { width: W, height: HP } = useWindowDimensions();
   const D = data || {};
   const T = D.T || {};
   const C = tema(D.th);
   const items = D.items || [];
-  const CW = Math.min(Math.round(W * 0.64), 300);
-  const CH = Math.round(CW * 1.42);
+  const CH = Math.min(Math.round(HP * 0.46), 430);
+  const CW = Math.round(CH / 1.586);
+  // Paso entre páginas: en reposo solo se ve el borde de las vecinas (como en el video de referencia)
+  const P = Math.round(W / 2 + CW * 0.42 - 10);
   const pags = useMemo(() => [...items, { add: 1 }], [items]);
   const pos = useRef(new Animated.Value(0)).current; // 0 = primera tarjeta, 1 = segunda…
   const posV = useRef(0);
+  const arrastre = useRef(0); // momento del último deslizamiento (para no confundirlo con un toque)
   const [idx, setIdx] = useState(0);
   const idxRef = useRef(0);
   const abre = useRef(new Animated.Value(0)).current;
@@ -128,30 +154,36 @@ export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, 
       onMoveShouldSetPanResponderCapture: (_, g) => Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
       onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: () => {
+        arrastre.current = Date.now();
         pos.stopAnimation((v) => {
           inicio = v;
           posV.current = v;
         });
       },
       onPanResponderMove: (_, g) => {
-        let v = inicio - g.dx / (CW + 18);
+        let v = inicio - g.dx / P;
         const max = nRef.current - 1;
         if (v < 0) v = v * 0.3; // resistencia en los bordes
         if (v > max) v = max + (v - max) * 0.3;
         pos.setValue(v);
       },
       onPanResponderRelease: (_, g) => {
-        const v = posV.current - g.vx * 0.35;
-        ir(Math.round(v));
+        arrastre.current = Date.now();
+        // Cuánto arrastraste (en tarjetas) + un empujón según la velocidad
+        const vx = Number.isFinite(g.vx) ? Math.max(-2, Math.min(2, g.vx)) : 0;
+        const avance = Math.abs(posV.current - inicio) > 0.01 ? posV.current - inicio : -g.dx / P;
+        let k = Math.round(inicio + avance - vx * 0.25);
+        if (k === Math.round(inicio) && Math.abs(avance) > 0.18) k = Math.round(inicio) + (avance > 0 ? 1 : -1);
+        ir(k);
       },
       onPanResponderTerminate: () => ir(Math.round(posV.current)),
     });
-  }, [CW]);
+  }, [CW, P]);
   // Al abrir: las tarjetas entran desde la derecha, una tras otra
   useEffect(() => {
     if (!visible) return;
     abre.setValue(0);
-    Animated.timing(abre, { toValue: 1, duration: 900, easing: Easing.out(Easing.back(1.1)), useNativeDriver: true }).start();
+    Animated.spring(abre, { toValue: 1, useNativeDriver: true, speed: 7, bounciness: 7, delay: 60 }).start();
   }, [visible]);
 
   // Ir a la cuenta pedida (al abrir o después de agregar una)
@@ -169,24 +201,32 @@ export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, 
   const credito = it && it.tipo === 'credito';
 
   const pagina = (item, i) => {
+    // Cilindro 3D: al deslizar, la tarjeta que sale gira y la que entra llega girada al revés
     const r = [i - 2, i - 1, i, i + 1, i + 2];
-    const mx = pos.interpolate({ inputRange: r, outputRange: [(CW + 18) * 2, CW + 18, 0, -(CW + 18), -(CW + 18) * 2], extrapolate: 'extend' });
-    const esc = pos.interpolate({ inputRange: r, outputRange: [0.86, 0.9, 1, 0.9, 0.86], extrapolate: 'clamp' });
-    const sombra = pos.interpolate({ inputRange: r, outputRange: [0.25, 0.18, 0, 0.18, 0.25], extrapolate: 'clamp' });
-    const giro = pos.interpolate({ inputRange: r, outputRange: ['-4deg', '-3deg', '0deg', '3deg', '4deg'], extrapolate: 'clamp' });
-    const d = Math.abs(i - idx);
-    const entra = abre.interpolate({ inputRange: [0, 1], outputRange: [W * (0.9 + d * 0.35), 0] });
+    const mx = pos.interpolate({ inputRange: r, outputRange: [P * 2, P, 0, -P, -P * 2], extrapolate: 'extend' });
+    const giro = pos.interpolate({ inputRange: r, outputRange: ['-42deg', '-30deg', '0deg', '30deg', '42deg'], extrapolate: 'clamp' });
+    const esc = pos.interpolate({ inputRange: r, outputRange: [0.86, 0.93, 1, 0.93, 0.86], extrapolate: 'clamp' });
+    const sombra = pos.interpolate({ inputRange: r, outputRange: [0.4, 0.25, 0, 0.25, 0.4], extrapolate: 'clamp' });
+    const d = i - idx;
+    const ad = Math.abs(d);
+    // Entrada: la tarjeta del centro llega volando inclinada desde abajo; las vecinas aparecen después
+    const subeY = abre.interpolate({ inputRange: [0, 1], outputRange: [HP * 0.55 + ad * 60, 0] });
+    const ladea = abre.interpolate({ inputRange: [0, 1], outputRange: [`${-26 + d * 8}deg`, '0deg'] });
+    const crece = abre.interpolate({ inputRange: [0, 1], outputRange: [0.78, 1] });
+    const aparece = ad === 0 ? 1 : abre.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0, 0, 1], extrapolate: 'clamp' });
     return (
       <Animated.View
         key={item.add ? 'add' : String(item.i != null ? item.i : i)}
         style={[
           st.carta,
-          { width: CW, height: CH, left: (W - CW) / 2, zIndex: 100 - d, elevation: 100 - d },
-          { transform: [{ translateX: entra }, { perspective: 1000 }, { translateX: mx }, { scale: esc }, { rotateY: giro }] },
+          { width: CW, height: CH, left: (W - CW) / 2, zIndex: 100 - ad, elevation: 100 - ad, opacity: aparece },
+          {
+            transform: [{ translateY: subeY }, { rotate: ladea }, { scale: crece }, { perspective: 900 }, { translateX: mx }, { rotateY: giro }, { scale: esc }],
+          },
         ]}
       >
         {item.add ? (
-          <Toque onPress={onAdd} label={T.add}>
+          <Toque onPress={() => Date.now() - arrastre.current > 400 && onAdd()} label={T.add}>
             <View style={[st.nueva, { width: CW, height: CH, borderColor: alfa(C.ink, 0.22), backgroundColor: C.sf }]}>
               <View style={[st.mas, { backgroundColor: C.ink }]}>
                 <Ico xml={PLUS} size={26} color={C.bg} />
@@ -196,7 +236,7 @@ export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, 
             </View>
           </Toque>
         ) : (
-          <Toque onPress={() => i !== idx && ir(i, true)} label={item.n}>
+          <Toque onPress={() => Date.now() - arrastre.current > 400 && i !== idx && ir(i, true)} label={item.n}>
             <View>
             <Plastico
               w={CW}
@@ -208,6 +248,7 @@ export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, 
               sub={item.banco && item.banco !== (item.apodo || item.n) ? item.banco : ''}
               red={item.red}
               tipoN={item.tipoN}
+              portada={item.portada}
             />
             <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: Math.round(CW * 0.11), backgroundColor: '#000', opacity: sombra }]} />
             </View>
@@ -220,8 +261,13 @@ export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: C.bg }}>
-        <LinearGradient colors={[alfa(color, C.dark ? 0.45 : 0.22), alfa(color, 0)]} style={[st.fondo, { height: CH + ins.top + 160 }]} />
-        <View style={[st.diag, { backgroundColor: alfa(color, C.dark ? 0.55 : 0.4), width: W * 1.3, top: ins.top + CH * 0.18, left: W * 0.35 }]} />
+        <LinearGradient
+          colors={[alfa(color, C.dark ? 0.55 : 0.35), alfa(color, C.dark ? 0.22 : 0.14), alfa(color, 0)]}
+          locations={[0, 0.55, 1]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={[st.fondo, { height: CH + ins.top + 230 }]}
+        />
         <ScrollView contentContainerStyle={{ paddingTop: ins.top + 6, paddingBottom: ins.bottom + 30 }} showsVerticalScrollIndicator={false}>
           {/* Encabezado */}
           <View style={[st.fila, { justifyContent: 'space-between', paddingHorizontal: 16 }]}>
@@ -347,7 +393,9 @@ export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, 
               )}
             </View>
           ) : (
-            <View style={{ paddingHorizontal: 24, alignItems: 'center', marginTop: 24 }}>
+            <View style={{ paddingHorizontal: 24, alignItems: 'center', marginTop: 18 }}>
+              <Text style={{ color: C.ink, fontSize: 30, fontWeight: '700', letterSpacing: -0.6 }}>{T.nueva || T.add}</Text>
+              <Text style={{ color: C.mut, fontSize: 14, textAlign: 'center', marginTop: 6, marginBottom: 18, lineHeight: 20 }}>{T.addS}</Text>
               <Toque onPress={onAdd} style={[st.grande, { backgroundColor: C.ac }]}>
                 <Text style={{ color: '#FFFFFF', fontSize: 17, fontWeight: '700' }}>{T.add}</Text>
               </Toque>

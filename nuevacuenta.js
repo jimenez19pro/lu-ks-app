@@ -21,6 +21,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CHEV, Ico, Tile, Toque, alfa, mezcla, tema } from './inicio';
 import { Plastico, claro } from './cuentas';
+import * as ImagePicker from 'expo-image-picker';
+import { SaveFormat, manipulateAsync } from 'expo-image-manipulator';
 
 const TX = {
   nueva: ['Nueva cuenta', 'New account'],
@@ -105,6 +107,7 @@ export default function NuevaCuenta({ D, visible, resultado, onClose, onSave, on
   const [error, setError] = useState('');
   const [fase, setFase] = useState('form'); // form | anim | ok
   const [paso, setPaso] = useState(0);
+  const [portada, setPortada] = useState('');
   const giro = useRef(new Animated.Value(0)).current;
   const prog = useRef(new Animated.Value(0)).current;
   const sube = useRef(new Animated.Value(0)).current;
@@ -117,6 +120,7 @@ export default function NuevaCuenta({ D, visible, resultado, onClose, onSave, on
   useEffect(() => {
     if (!visible || !D) return;
     setF({ ...D.f, act: '', cupo: D.f.cupo ? String(D.f.cupo) : '' });
+    setPortada(D.portada || '');
     setPag('main');
     setQ('');
     setAvanz(false);
@@ -172,6 +176,19 @@ export default function NuevaCuenta({ D, visible, resultado, onClose, onSave, on
   const frente = giro.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });
   const dorso = giro.interpolate({ inputRange: [0, 1], outputRange: ['180deg', '360deg'] });
 
+  const elegirPortada = async () => {
+    try {
+      const pm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (pm && pm.granted === false) return;
+      const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [8, 5], quality: 1 });
+      if (!r || r.canceled || !r.assets || !r.assets[0]) return;
+      const a = r.assets[0];
+      const out = await manipulateAsync(a.uri, [{ resize: { width: 900 } }], { compress: 0.72, format: SaveFormat.JPEG, base64: true });
+      if (out && out.base64) setPortada('data:image/jpeg;base64,' + out.base64);
+    } catch (e) {
+      Alert.alert(en ? 'Could not open Photos' : 'No se pudo abrir Fotos', String((e && e.message) || e));
+    }
+  };
   const guardar = () => {
     Keyboard.dismiss();
     if (!ef && !f.banco) return setError(t('errBanco'));
@@ -206,6 +223,7 @@ export default function NuevaCuenta({ D, visible, resultado, onClose, onSave, on
       rec: !!f.rec,
       pri: !!f.pri,
       act: solo(f.act),
+      portada,
     });
   };
   const eliminar = () =>
@@ -238,7 +256,7 @@ export default function NuevaCuenta({ D, visible, resultado, onClose, onSave, on
   const preview = (
     <View style={{ height: PH, marginTop: 6 }}>
       <Animated.View style={[st.cara, { transform: [{ perspective: 1000 }, { rotateY: frente }] }]}>
-        <Plastico w={PW} h={PH} color={color} tile={tileBanco} titulo={nombreVis} sub={f.banco && !ef && f.apodo ? f.banco : ''} red={cr ? f.red : ''} tipoN={tipoN} abajo={montoVis} />
+        <Plastico w={PW} h={PH} color={color} tile={tileBanco} titulo={nombreVis} sub={f.banco && !ef && f.apodo ? f.banco : ''} red={cr ? f.red : ''} tipoN={tipoN} abajo={montoVis} portada={portada} />
       </Animated.View>
       <Animated.View style={[st.cara, { transform: [{ perspective: 1000 }, { rotateY: dorso }] }]}>
         <LinearGradient colors={[mezcla(color, '#000', 0.75), mezcla(color, '#000', 0.45)]} style={{ width: PW, height: PH, borderRadius: Math.round(PH * 0.11), overflow: 'hidden' }}>
@@ -344,6 +362,22 @@ export default function NuevaCuenta({ D, visible, resultado, onClose, onSave, on
                 ))}
               </View>
 
+              {/* Portada */}
+              <View style={[st.fila, st.sw, { backgroundColor: C.sf, gap: 12 }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: C.ink, fontSize: 16 }}>{(D.T2 && D.T2.portada) || (en ? 'Card cover' : 'Portada de la tarjeta')}</Text>
+                  <Text style={{ color: C.mut, fontSize: 12, marginTop: 2, lineHeight: 16 }}>{(D.T2 && D.T2.ayudaP) || ''}</Text>
+                </View>
+                {portada ? (
+                  <Toque onPress={() => setPortada('')} hitSlop={8}>
+                    <Text style={{ color: C.neg, fontSize: 15, fontWeight: '600' }}>{(D.T2 && D.T2.quitar) || (en ? 'Remove' : 'Quitar')}</Text>
+                  </Toque>
+                ) : null}
+                <Toque onPress={elegirPortada} style={[st.chip, { backgroundColor: C.ac }]}>
+                  <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>{(D.T2 && D.T2.elegir) || (en ? 'Choose photo' : 'Elegir foto')}</Text>
+                </Toque>
+              </View>
+
               {/* Banco */}
               {!ef ? (
                 <View style={{ marginTop: 14 }}>
@@ -444,7 +478,7 @@ export default function NuevaCuenta({ D, visible, resultado, onClose, onSave, on
                 </>
               ) : null}
               <View style={{ alignItems: 'center', marginTop: fase === 'ok' ? 40 : 28 }}>
-                <Plastico w={PW - 30} h={Math.round((PW - 30) / 1.586)} color={color} tile={tileBanco} titulo={nombreVis} red={cr ? f.red : ''} tipoN={tipoN} abajo={montoVis} />
+                <Plastico w={PW - 30} h={Math.round((PW - 30) / 1.586)} color={color} tile={tileBanco} titulo={nombreVis} red={cr ? f.red : ''} tipoN={tipoN} abajo={montoVis} portada={portada} />
               </View>
               {fase === 'anim' ? (
                 <View style={[st.pasos, { backgroundColor: 'rgba(255,255,255,0.07)' }]}>
