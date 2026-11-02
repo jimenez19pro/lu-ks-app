@@ -36,11 +36,12 @@ import Bienvenida, { Intro } from './bienvenida';
 import { elegir } from './selector';
 import { puente } from './puente';
 import { BASE, actualizar, copiaGuardada, marcarMala } from './copia';
+import { mezclarPortadas } from './portadas';
 import { borrar, guardarJSON, leerJSON } from './almacen';
 import * as Rec from './recordatorios';
 
 export const WEB = BASE;
-const VERSION = '1.6.0';
+const VERSION = '1.6.1';
 
 // Dominios que se abren dentro de la app. Todo lo demás (WhatsApp, correo,
 // Google Sheets, páginas externas) se abre afuera, en su app o en Safari.
@@ -141,6 +142,8 @@ export default function App() {
   const [accSes, setAccSes] = useState(0); // cuenta cada apertura del formulario
   const [land, setLand] = useState(null);
   const [portadas, setPortadas] = useState(() => leerJSON(F_PORT, {}) || {});
+  const portRef = useRef(portadas); // copia segura de las portadas (solo se quitan si la persona las quita)
+  const portRep = useRef({}); // portadas que ya se pidió volver a subir en esta apertura
   const [intro, setIntro] = useState(!!inicial.snap);
   useEffect(() => {
     const t = setTimeout(() => setIntro(false), 4500); // por si acaso
@@ -341,6 +344,8 @@ export default function App() {
           setAccVis(false);
           setAccForm(null);
           setPortadas({});
+          portRef.current = {};
+          portRep.current = {};
           borrar(F_PORT);
           borrar(F_INICIO);
           Rec.apagar();
@@ -397,8 +402,11 @@ export default function App() {
           setCuentasVis(true);
         }
       } else if (m.t === 'portadas') {
-        // Portadas guardadas también en el celular (se ven al instante al abrir)
-        const p = m.m || {};
+        // Portadas guardadas también en el celular (se ven al instante al abrir).
+        // Se MEZCLAN: una portada solo sale de aquí si la persona la quitó (o borró la cuenta).
+        const { p, faltan } = mezclarPortadas(portRef.current, m, portRep.current);
+        if (Object.keys(faltan).length) js(`window.__lkPortRep && window.__lkPortRep(${JSON.stringify(faltan)})`);
+        portRef.current = p;
         setPortadas(p);
         guardarJSON(F_PORT, p);
       } else if (m.t === 'accform') {
@@ -444,6 +452,8 @@ export default function App() {
         saveAndShare(m);
       } else if (m.t === 'fileErr') {
         Alert.alert('No se pudo preparar el archivo', 'Intenta otra vez.');
+      } else if (m.t === 'err' && m.where === 'portada') {
+        Alert.alert('Portada', String(m.msg || ''));
       } else if (m.t === 'err' && (m.where === 'cuentas' || m.where === 'accform')) {
         cuentasPend.current = false;
         Alert.alert('No se pudo abrir', 'Espera un momento a que cargue Lu-Ks e intenta otra vez.');

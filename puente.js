@@ -674,6 +674,7 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
   function state() {
     var tb = typeof tab !== 'undefined' ? tab : null, hv = typeof HV !== 'undefined' ? HV : null;
     var out = vis(q('#auth'));
+    if (out) ultimaFirmaPort = ''; // al volver a entrar, mandar las portadas otra vez
     var hoja = out ? null : hojaArriba();
     var home = tb === 'home' && hv === 'fin' && !!q('#app .hd');
     var txv = tb === 'tx' && !!q('#app #q-in');
@@ -1042,13 +1043,29 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
       lang: window.LKLANG || 'es', th: theme() };
   }
   // Portadas: la app las guarda en el celular para mostrarlas al instante
-  window.__lkPortadas = function () {
+  window.__lkPortadas = function (forzar) {
     try {
       if (!window.LKPORT || !LKPORT.todas) return;
-      var t = LKPORT.todas(), o = {};
-      Object.keys(t).forEach(function (n) { o[n] = { img: t[n], c: LKPORT.color(n) }; });
-      post({ t: 'portadas', m: o });
+      var t = LKPORT.todas(), o = {}, firma = '';
+      if (LKPORT.listo && !LKPORT.listo() && !Object.keys(t).length) return; // aún no se sabe: no mandar una lista vacía
+      var q = LKPORT.quitadas ? Object.keys(LKPORT.quitadas()) : [], srv = LKPORT.servidor ? !!LKPORT.servidor() : false;
+      Object.keys(t).sort().forEach(function (n) { o[n] = { img: t[n], c: LKPORT.color(n) }; firma += n + ':' + t[n].length + ':' + o[n].c + '|'; });
+      firma += '#' + q.sort().join('|') + '#' + srv;
+      if (!forzar && firma === ultimaFirmaPort) return; // nada cambió: no mandar las fotos otra vez
+      ultimaFirmaPort = firma;
+      post({ t: 'portadas', m: o, q: q, srv: srv });
     } catch (e) {}
+  };
+  var ultimaFirmaPort = '';
+  // La app manda su copia de las portadas; se suben las que Firebase no tenga
+  window.__lkPortRep = function (mapa) {
+    try { var k = window.LKPORT && LKPORT.reparar ? LKPORT.reparar(mapa || {}) : 0; post({ t: 'portrep', k: k }); } catch (e) {}
+  };
+  // Si Firebase no deja guardar o leer una portada, la app avisa (antes fallaba en silencio)
+  var errPortVisto = false;
+  window.__lkPortErr = function (que, cod) {
+    if (errPortVisto) return; errPortVisto = true;
+    post({ t: 'err', where: 'portada', msg: (que === 'leer' ? Lx('No pude leer las portadas', 'Could not read card covers') : Lx('La portada aún no se guardó en la nube; se reintentará sola', 'The card cover is not saved to the cloud yet; it will retry')) + ' (' + cod + ')' });
   };
   window.__lkAccForm = function (i) {
     try { post(accFormData(i == null ? -1 : +i)); } catch (e) { post({ t: 'err', where: 'accform', msg: String(e && e.message || e) }); }
