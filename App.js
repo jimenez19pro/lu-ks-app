@@ -52,6 +52,7 @@ const DARK = { bg: '#000000', fg: '#FFFFFF', sub: '#98989F', acc: '#0A84FF' };
 
 const F_INICIO = 'inicio.json';
 const F_PREFS = 'prefs.json';
+const F_PORT = 'portadas.json';
 const ESPERA_COPIA = 15000;
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -137,7 +138,9 @@ export default function App() {
   const [accForm, setAccForm] = useState(null);
   const [accVis, setAccVis] = useState(false);
   const [accRes, setAccRes] = useState(null);
+  const [accSes, setAccSes] = useState(0); // cuenta cada apertura del formulario
   const [land, setLand] = useState(null);
+  const [portadas, setPortadas] = useState(() => leerJSON(F_PORT, {}) || {});
   const [intro, setIntro] = useState(!!inicial.snap);
   useEffect(() => {
     const t = setTimeout(() => setIntro(false), 4500); // por si acaso
@@ -330,6 +333,15 @@ export default function App() {
           setCuenta(null);
           setMenu(null);
           setFormVis(false);
+          // Al cerrar sesión no deben quedar datos de esta persona en el celular
+          setHoja(null);
+          setCuentas(null);
+          setCuentasVis(false);
+          cuentasPend.current = false;
+          setAccVis(false);
+          setAccForm(null);
+          setPortadas({});
+          borrar(F_PORT);
           borrar(F_INICIO);
           Rec.apagar();
           guardarPrefs({ remFirma: null });
@@ -384,9 +396,15 @@ export default function App() {
           cuentasPend.current = false;
           setCuentasVis(true);
         }
+      } else if (m.t === 'portadas') {
+        // Portadas guardadas también en el celular (se ven al instante al abrir)
+        const p = m.m || {};
+        setPortadas(p);
+        guardarJSON(F_PORT, p);
       } else if (m.t === 'accform') {
         setAccForm(m);
         setAccRes(null);
+        setAccSes((n) => n + 1);
         setAccVis(true);
       } else if (m.t === 'accsaved') {
         setAccRes(m);
@@ -426,6 +444,9 @@ export default function App() {
         saveAndShare(m);
       } else if (m.t === 'fileErr') {
         Alert.alert('No se pudo preparar el archivo', 'Intenta otra vez.');
+      } else if (m.t === 'err' && (m.where === 'cuentas' || m.where === 'accform')) {
+        cuentasPend.current = false;
+        Alert.alert('No se pudo abrir', 'Espera un momento a que cargue Lu-Ks e intenta otra vez.');
       } else if (m.t === 'back') {
         if (canBack.current && web.current) web.current.goBack();
         else BackHandler.exitApp();
@@ -731,8 +752,15 @@ export default function App() {
         <Detalle d={det} {...hojaDet} />
         <Cuenta c={cuenta} {...hojaCuenta} />
         <Menu m={menu} {...hojaMenu} />
-        <Cuentas data={cuentas} visible={cuentasVis} {...hojaCuentas} />
-        <NuevaCuenta D={accForm} visible={accVis} resultado={accRes} {...hojaNuevaCuenta} />
+        <Cuentas data={cuentas} portadas={portadas} visible={cuentasVis} {...hojaCuentas} />
+        <NuevaCuenta
+          D={accForm}
+          ses={accSes}
+          portadaGuardada={accForm && accForm.i >= 0 && !accForm.portada && portadas[accForm.f && accForm.f.name] ? portadas[accForm.f.name].img : ''}
+          visible={accVis}
+          resultado={accRes}
+          {...hojaNuevaCuenta}
+        />
         <Formulario visible={formVis} datos={formData} editar={editar} onClose={cerrarForm} onSave={guardarForm} onWeb={formWeb} onDelete={borrarMov} />
       </View>
     </SafeAreaProvider>

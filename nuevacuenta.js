@@ -93,7 +93,7 @@ const miles = (s) => {
   return d ? '$ ' + d.replace(/\B(?=(\d{3})+(?!\d))/g, '.') : '';
 };
 
-export default function NuevaCuenta({ D, visible, resultado, onClose, onSave, onVer }) {
+export default function NuevaCuenta({ D, ses, portadaGuardada, visible, resultado, onClose, onSave, onVer }) {
   const ins = useSafeAreaInsets();
   const { width: W } = useWindowDimensions();
   const en = D && D.lang === 'en';
@@ -108,6 +108,7 @@ export default function NuevaCuenta({ D, visible, resultado, onClose, onSave, on
   const [fase, setFase] = useState('form'); // form | anim | ok
   const [paso, setPaso] = useState(0);
   const [portada, setPortada] = useState('');
+  const portadaCambio = useRef(false);
   const giro = useRef(new Animated.Value(0)).current;
   const prog = useRef(new Animated.Value(0)).current;
   const sube = useRef(new Animated.Value(0)).current;
@@ -120,7 +121,8 @@ export default function NuevaCuenta({ D, visible, resultado, onClose, onSave, on
   useEffect(() => {
     if (!visible || !D) return;
     setF({ ...D.f, act: '', cupo: D.f.cupo ? String(D.f.cupo) : '' });
-    setPortada(D.portada || '');
+    setPortada(D.portada || portadaGuardada || '');
+    portadaCambio.current = false;
     setPag('main');
     setQ('');
     setAvanz(false);
@@ -128,12 +130,14 @@ export default function NuevaCuenta({ D, visible, resultado, onClose, onSave, on
     setFase('form');
     setPaso(0);
     giro.setValue(0);
-  }, [visible, D]);
+    // Solo al abrir el formulario (no cada vez que la app se redibuja): si no, se borraba lo escrito
+  }, [visible, ses]);
 
   // Llega la respuesta de la web
   useEffect(() => {
     if (!resultado || !esperando.current) return;
     esperando.current = false;
+    clearTimeout(esperaT.current);
     if (!resultado.ok) {
       setFase('form');
       setError(resultado.msg || '');
@@ -151,6 +155,14 @@ export default function NuevaCuenta({ D, visible, resultado, onClose, onSave, on
     else animLista.current = fin;
   }, [resultado]);
 
+  // Si la portada llega después de abrir (Firebase tardó), ponerla sin tocar lo demás
+  useEffect(() => {
+    const p = (D && D.portada) || portadaGuardada;
+    if (visible && p && !portadaCambio.current) setPortada(p);
+  }, [visible, D && D.portada, portadaGuardada]);
+  // Si la web no responde al guardar, no dejar la animación colgada
+  const esperaT = useRef(null);
+  useEffect(() => () => clearTimeout(esperaT.current), []);
   const bancos = useMemo(() => {
     const l = (D && D.banks) || [];
     const k = q.trim().toLowerCase();
@@ -184,7 +196,10 @@ export default function NuevaCuenta({ D, visible, resultado, onClose, onSave, on
       if (!r || r.canceled || !r.assets || !r.assets[0]) return;
       const a = r.assets[0];
       const out = await manipulateAsync(a.uri, [{ resize: { width: 900 } }], { compress: 0.72, format: SaveFormat.JPEG, base64: true });
-      if (out && out.base64) setPortada('data:image/jpeg;base64,' + out.base64);
+      if (out && out.base64) {
+        portadaCambio.current = true;
+        setPortada('data:image/jpeg;base64,' + out.base64);
+      }
     } catch (e) {
       Alert.alert(en ? 'Could not open Photos' : 'No se pudo abrir Fotos', String((e && e.message) || e));
     }
@@ -201,6 +216,13 @@ export default function NuevaCuenta({ D, visible, resultado, onClose, onSave, on
     prog.setValue(0);
     animLista.current = false;
     esperando.current = true;
+    clearTimeout(esperaT.current);
+    esperaT.current = setTimeout(() => {
+      if (!esperando.current) return;
+      esperando.current = false;
+      setFase('form');
+      setError(en ? 'Lu-Ks did not confirm the save. Check your connection and try again.' : 'Lu-Ks no confirmó que se guardó. Revisa tu conexión e intenta otra vez.');
+    }, 12000);
     Animated.timing(prog, { toValue: 0.45, duration: 650, easing: Easing.out(Easing.quad), useNativeDriver: false }).start(() => {
       setPaso(2);
       Animated.timing(prog, { toValue: 0.85, duration: 700, easing: Easing.inOut(Easing.quad), useNativeDriver: false }).start(() => {
@@ -223,7 +245,7 @@ export default function NuevaCuenta({ D, visible, resultado, onClose, onSave, on
       rec: !!f.rec,
       pri: !!f.pri,
       act: solo(f.act),
-      portada,
+      ...(portadaCambio.current ? { portada } : {}),
     });
   };
   const eliminar = () =>
@@ -369,7 +391,13 @@ export default function NuevaCuenta({ D, visible, resultado, onClose, onSave, on
                   <Text style={{ color: C.mut, fontSize: 12, marginTop: 2, lineHeight: 16 }}>{(D.T2 && D.T2.ayudaP) || ''}</Text>
                 </View>
                 {portada ? (
-                  <Toque onPress={() => setPortada('')} hitSlop={8}>
+                  <Toque
+                    onPress={() => {
+                      portadaCambio.current = true;
+                      setPortada('');
+                    }}
+                    hitSlop={8}
+                  >
                     <Text style={{ color: C.neg, fontSize: 15, fontWeight: '600' }}>{(D.T2 && D.T2.quitar) || (en ? 'Remove' : 'Quitar')}</Text>
                   </Toque>
                 ) : null}

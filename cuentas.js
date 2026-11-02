@@ -110,13 +110,20 @@ export function Plastico({ w, h, color, tile, titulo, sub, red, tipoN, abajo, ve
 }
 
 /* ---------- Pantalla ---------- */
-export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, onDet }) {
+export default function Cuentas({ data, portadas, visible, onClose, onAdd, onEdit, onVer, onDet }) {
   const ins = useSafeAreaInsets();
   const { width: W, height: HP } = useWindowDimensions();
   const D = data || {};
   const T = D.T || {};
   const C = tema(D.th);
-  const items = D.items || [];
+  const items = useMemo(
+    () =>
+      (D.items || []).map((x) => {
+        const g = portadas && portadas[x.n];
+        return g && !x.portada ? { ...x, portada: g.img, portadaC: x.portadaC || g.c } : x;
+      }),
+    [D.items, portadas]
+  );
   const CH = Math.min(Math.round(HP * 0.46), 430);
   const CW = Math.round(CH / 1.586);
   // Paso entre páginas: en reposo solo se ve el borde de las vecinas (como en el video de referencia)
@@ -197,14 +204,17 @@ export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, 
     ]).start();
   }, [visible]);
 
+  // Cerrar con la misma suavidad con la que abre
+  const cerrar = () => Animated.timing(fondo, { toValue: 0, duration: 180, easing: Easing.in(Easing.quad), useNativeDriver: true }).start(() => onClose && onClose());
+
   // Ir a la cuenta pedida (al abrir o después de agregar una)
   useEffect(() => {
     if (!visible || !data) return;
     const i = Math.max(0, Math.min(data.at || 0, pags.length - 1));
     pos.setValue(i);
     posV.current = i;
-    idxRef.current = i;
-    setIdx(i);
+    idxRef.current = Math.round(i);
+    setIdx(Math.round(i));
   }, [visible, data && data.at, data && data.items && data.items.length]);
 
   const it = items[idx];
@@ -215,10 +225,12 @@ export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, 
     // Cilindro 3D: al deslizar, la tarjeta que sale gira y la que entra llega girada al revés
     const r = [i - 2, i - 1, i, i + 1, i + 2];
     const mx = pos.interpolate({ inputRange: r, outputRange: [P * 2, P, 0, -P, -P * 2], extrapolate: 'extend' });
-    const giro = pos.interpolate({ inputRange: r, outputRange: ['-42deg', '-30deg', '0deg', '30deg', '42deg'], extrapolate: 'clamp' });
+    const giro = pos.interpolate({ inputRange: r, outputRange: ['42deg', '30deg', '0deg', '-30deg', '-42deg'], extrapolate: 'clamp' });
     const esc = pos.interpolate({ inputRange: r, outputRange: [0.86, 0.93, 1, 0.93, 0.86], extrapolate: 'clamp' });
     const sombra = pos.interpolate({ inputRange: r, outputRange: [0.4, 0.25, 0, 0.25, 0.4], extrapolate: 'clamp' });
-    const d = i - idx;
+    // Para la entrada se usa la tarjeta con la que se abrió (fija), no la actual:
+    // si cambiara a mitad de la animación, ésta se cortaría.
+    const d = i - Math.round((data && data.at) || 0);
     const ad = Math.abs(d);
     // Entrada: la tarjeta del centro llega volando inclinada desde abajo; las vecinas aparecen después
     // La del centro: empieza a la izquierda y un poco arriba, pequeña y casi acostada (-70°)
@@ -249,7 +261,7 @@ export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, 
             </View>
           </Toque>
         ) : (
-          <Toque onPress={() => Date.now() - arrastre.current > 400 && i !== idx && ir(i, true)} label={item.n}>
+          <Toque onPress={() => Date.now() - arrastre.current > 400 && i !== idxRef.current && ir(i, true)} label={item.n}>
             <View>
             <Plastico
               w={CW}
@@ -271,8 +283,12 @@ export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, 
     );
   };
 
+  // Las tarjetas NO se vuelven a dibujar mientras deslizas (solo se mueven con la animación);
+  // redibujarlas a mitad del gesto hacía que en el iPhone la anterior apareciera encima un instante.
+  const tarjetas = useMemo(() => pags.map((p, i) => pagina(p, i)), [pags, CW, CH, P, W, HP, data && data.at, C.dark, C.ink, C.sf, T.add, T.addS]);
+
   return (
-    <Modal visible={visible} animationType="none" transparent statusBarTranslucent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="none" transparent statusBarTranslucent onRequestClose={cerrar}>
       <Animated.View style={{ flex: 1, backgroundColor: C.bg, opacity: fondo }}>
         <LinearGradient
           colors={[alfa(color, C.dark ? 0.55 : 0.35), alfa(color, C.dark ? 0.22 : 0.14), alfa(color, 0)]}
@@ -284,7 +300,7 @@ export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, 
         <ScrollView contentContainerStyle={{ paddingTop: ins.top + 6, paddingBottom: ins.bottom + 30 }} showsVerticalScrollIndicator={false}>
           {/* Encabezado */}
           <View style={[st.fila, { justifyContent: 'space-between', paddingHorizontal: 16 }]}>
-            <Toque onPress={onClose} label="Atrás" hitSlop={10}>
+            <Toque onPress={cerrar} label="Atrás" hitSlop={10}>
               <View style={[st.circ, { backgroundColor: alfa(C.sf, 0.85) }]}>
                 <View style={{ transform: [{ rotate: '180deg' }] }}>
                   <Ico xml={CHEV} size={18} color={C.ink} />
@@ -301,7 +317,7 @@ export default function Cuentas({ data, visible, onClose, onAdd, onEdit, onVer, 
 
           {/* Carrusel */}
           <View style={{ height: CH + 44, marginTop: 10 }} {...pan.panHandlers}>
-            <View style={{ position: 'absolute', left: 0, right: 0, top: 22, height: CH }}>{pags.map((p, i) => pagina(p, i))}</View>
+            <View style={{ position: 'absolute', left: 0, right: 0, top: 22, height: CH }}>{tarjetas}</View>
           </View>
 
           {/* Puntos */}
@@ -427,7 +443,6 @@ const st = StyleSheet.create({
   fila: { flexDirection: 'row', alignItems: 'center' },
   fondo: { position: 'absolute', left: 0, right: 0, top: 0 },
   carta: { position: 'absolute', top: 0 },
-  diag: { position: 'absolute', height: 260, borderRadius: 60, transform: [{ rotate: '-28deg' }] },
   circ: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   nueva: { borderRadius: 30, borderWidth: 2, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
   mas: { width: 54, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center' },

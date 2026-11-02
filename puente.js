@@ -1041,6 +1041,15 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
       banks: BANKS.concat(['Otro banco']).map(function (n) { return { n: n, tile: tileH(bkTile(n, 40)) }; }), cash: tileH(accIco({ tipo: 'efectivo' }, 40)),
       lang: window.LKLANG || 'es', th: theme() };
   }
+  // Portadas: la app las guarda en el celular para mostrarlas al instante
+  window.__lkPortadas = function () {
+    try {
+      if (!window.LKPORT || !LKPORT.todas) return;
+      var t = LKPORT.todas(), o = {};
+      Object.keys(t).forEach(function (n) { o[n] = { img: t[n], c: LKPORT.color(n) }; });
+      post({ t: 'portadas', m: o });
+    } catch (e) {}
+  };
   window.__lkAccForm = function (i) {
     try { post(accFormData(i == null ? -1 : +i)); } catch (e) { post({ t: 'err', where: 'accform', msg: String(e && e.message || e) }); }
   };
@@ -1057,11 +1066,13 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
       // Si saveAcc2 rechazó (falta banco, nombre o cupo), avisa al instante con toast
       var ok = !ultimoAviso && (JSON.stringify(ACC) !== antes || AE >= 0);
       // Portada: se guarda aparte (Firebase), con el nombre final de la cuenta
-      if (ok && window.LKPORT && d.portada !== undefined && !d.del) {
+      if (ok && window.LKPORT && !d.del) {
         var nNuevo = (ACC[AE >= 0 ? AE : ACC.length - 1] || {}).n;
-        if (nNuevo) {
+        if (nNuevo && d.portada !== undefined && (d.portada || (LKPORT.listo && LKPORT.listo()))) {
           if (nViejo && nViejo !== nNuevo) LKPORT.set(nViejo, '');
           LKPORT.set(nNuevo, d.portada || '');
+        } else if (nNuevo && nViejo && nViejo !== nNuevo) {
+          LKPORT.mover(nViejo, nNuevo); // cambió el nombre pero no la portada
         }
       } else if (window.LKPORT && d.del && nViejo) LKPORT.set(nViejo, '');
       post({ t: 'accsaved', ok: ok, del: !!d.del, i: ok && !d.del ? (AE >= 0 ? AE : ACC.length > n0 ? ACC.length - 1 : -1) : -1,
