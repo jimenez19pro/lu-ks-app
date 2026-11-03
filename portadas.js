@@ -22,3 +22,15 @@ export function mezclarPortadas(prev, m, pedidas = {}) {
   }
   return { p, faltan };
 }
+
+// Lee el archivo guardado (formato viejo = un solo mapa sin usuario → "suelta").
+export function archivoPortadas(x) {
+  if (x && x.v === 2 && x.por && typeof x.por === 'object') return { ultimo: x.ultimo || null, por: x.por };
+  if (x && typeof x === 'object' && Object.keys(x).length) return { ultimo: null, por: {}, suelta: x };
+  return { ultimo: null, por: {} };
+}
+// Portadas para mostrar al abrir la app (las del último usuario que entró).
+export function portadasDe(A) {
+  if (A.ultimo && A.por[A.ultimo]) return A.por[A.ultimo];
+  return A.suelta || {};
+}

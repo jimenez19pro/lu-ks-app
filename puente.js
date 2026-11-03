@@ -1053,7 +1053,8 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
       firma += '#' + q.sort().join('|') + '#' + srv;
       if (!forzar && firma === ultimaFirmaPort) return; // nada cambió: no mandar las fotos otra vez
       ultimaFirmaPort = firma;
-      post({ t: 'portadas', m: o, q: q, srv: srv });
+      var uidP = ''; try { uidP = (firebase.auth().currentUser || {}).uid || ''; } catch (e) {}
+      post({ t: 'portadas', m: o, q: q, srv: srv, u: uidP });
     } catch (e) {}
   };
   var ultimaFirmaPort = '';
@@ -1085,13 +1086,11 @@ export function puente({ version, os, recordatorios, sinSplash, formNativo }) {
       // Portada: se guarda aparte (Firebase), con el nombre final de la cuenta
       if (ok && window.LKPORT && !d.del) {
         var nNuevo = (ACC[AE >= 0 ? AE : ACC.length - 1] || {}).n;
-        if (nNuevo && d.portada !== undefined && (d.portada || (LKPORT.listo && LKPORT.listo()))) {
-          if (nViejo && nViejo !== nNuevo) LKPORT.set(nViejo, '');
-          LKPORT.set(nNuevo, d.portada || '');
-        } else if (nNuevo && nViejo && nViejo !== nNuevo) {
-          LKPORT.mover(nViejo, nNuevo); // cambió el nombre pero no la portada
-        }
-      } else if (window.LKPORT && d.del && nViejo) LKPORT.set(nViejo, '');
+        // Una portada solo se quita con el botón "Quitar" (portada: ''). Borrar o renombrar una cuenta no borra fotos.
+        if (nNuevo && d.portada) LKPORT.set(nNuevo, d.portada);
+        else if (nNuevo && d.portada === '' && LKPORT.quitar) LKPORT.quitar(nNuevo);
+        else if (nNuevo && nViejo && nViejo !== nNuevo) LKPORT.mover(nViejo, nNuevo); // cambió el nombre: se copia
+      }
       post({ t: 'accsaved', ok: ok, del: !!d.del, i: ok && !d.del ? (AE >= 0 ? AE : ACC.length > n0 ? ACC.length - 1 : -1) : -1,
         msg: ok ? '' : (ultimoAviso || Lx('No se pudo guardar. Intenta otra vez.', 'Could not save. Try again.')) });
     } catch (e) { post({ t: 'accsaved', ok: false, msg: String(e && e.message || e) }); }

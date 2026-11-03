@@ -36,12 +36,12 @@ import Bienvenida, { Intro } from './bienvenida';
 import { elegir } from './selector';
 import { puente } from './puente';
 import { BASE, actualizar, copiaGuardada, marcarMala } from './copia';
-import { mezclarPortadas } from './portadas';
+import { archivoPortadas, mezclarPortadas, portadasDe } from './portadas';
 import { borrar, guardarJSON, leerJSON } from './almacen';
 import * as Rec from './recordatorios';
 
 export const WEB = BASE;
-const VERSION = '1.6.1';
+const VERSION = '1.6.2';
 
 // Dominios que se abren dentro de la app. Todo lo demás (WhatsApp, correo,
 // Google Sheets, páginas externas) se abre afuera, en su app o en Safari.
@@ -141,7 +141,10 @@ export default function App() {
   const [accRes, setAccRes] = useState(null);
   const [accSes, setAccSes] = useState(0); // cuenta cada apertura del formulario
   const [land, setLand] = useState(null);
-  const [portadas, setPortadas] = useState(() => leerJSON(F_PORT, {}) || {});
+  // Copia de portadas en el celular, separada por usuario: {v:2, ultimo: uid, por: {uid: {nombre: {img, c}}}}
+  const portArch = useRef(null);
+  if (!portArch.current) portArch.current = archivoPortadas(leerJSON(F_PORT, null));
+  const [portadas, setPortadas] = useState(() => portadasDe(portArch.current));
   const portRef = useRef(portadas); // copia segura de las portadas (solo se quitan si la persona las quita)
   const portRep = useRef({}); // portadas que ya se pidió volver a subir en esta apertura
   const [intro, setIntro] = useState(!!inicial.snap);
@@ -343,10 +346,13 @@ export default function App() {
           cuentasPend.current = false;
           setAccVis(false);
           setAccForm(null);
+          // Las portadas NO se borran del celular al cerrar sesión: quedan guardadas para ese usuario
+          // (otra persona no las ve porque están separadas por usuario).
           setPortadas({});
           portRef.current = {};
           portRep.current = {};
-          borrar(F_PORT);
+          portArch.current.ultimo = null;
+          guardarJSON(F_PORT, { v: 2, ultimo: null, por: portArch.current.por });
           borrar(F_INICIO);
           Rec.apagar();
           guardarPrefs({ remFirma: null });
@@ -404,11 +410,19 @@ export default function App() {
       } else if (m.t === 'portadas') {
         // Portadas guardadas también en el celular (se ven al instante al abrir).
         // Se MEZCLAN: una portada solo sale de aquí si la persona la quitó (o borró la cuenta).
-        const { p, faltan } = mezclarPortadas(portRef.current, m, portRep.current);
+        const A = portArch.current;
+        const u = m.u || A.ultimo || '';
+        const base = (u && A.por[u]) || (A.suelta && u ? A.suelta : null) || (u === A.ultimo ? portRef.current : {}) || {};
+        const { p, faltan } = mezclarPortadas(base, m, portRep.current);
         if (Object.keys(faltan).length) js(`window.__lkPortRep && window.__lkPortRep(${JSON.stringify(faltan)})`);
         portRef.current = p;
         setPortadas(p);
-        guardarJSON(F_PORT, p);
+        if (u) {
+          A.por[u] = p;
+          A.ultimo = u;
+          delete A.suelta;
+          guardarJSON(F_PORT, { v: 2, ultimo: A.ultimo, por: A.por });
+        }
       } else if (m.t === 'accform') {
         setAccForm(m);
         setAccRes(null);
